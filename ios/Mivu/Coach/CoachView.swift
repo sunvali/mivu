@@ -418,6 +418,9 @@ struct CoachView: View {
                 if canRetry, let turn = coach.companionTurn {
                     Button("Try again") { Task { await coach.retry(turn.id) } }.modifier(BubbleAction()).disabled(coach.isWorking)
                 }
+            case .connect where coach.connection.planNotEligible:
+                Text("Your ChatGPT plan can’t be used in other apps.")
+                Link("Learn more", destination: MivuLinks.chatGPTPlanHelp).modifier(BubbleAction())
             case .connect:
                 Text("Connect ChatGPT so I can count for you")
                 ChatGPTConnectButton(connection: coach.connection, title: String(localized: "Connect")).modifier(BubbleAction())
@@ -495,7 +498,14 @@ struct CoachView: View {
             }
             // Without a model, Pip's bubble offers the connection instead of a footer line.
             if coach.connection.canInfer || DiaryLaunch.isCoachInferenceFixture {
-                if coach.connection.provider == .apple {
+                if coach.connection.provider == .apple, coach.connection.planNotEligible {
+                    HStack(spacing: 4) {
+                        Text("Using on-device AI. Your ChatGPT plan can’t be used in other apps.").foregroundStyle(Color.diarySecondary)
+                        Link("Learn more", destination: MivuLinks.chatGPTPlanHelp)
+                            .fontWeight(.semibold).foregroundStyle(Color.diaryAccent).frame(minHeight: 44)
+                    }
+                    .font(.caption).accessibilityIdentifier("coachAppleLimits")
+                } else if coach.connection.provider == .apple {
                     Text("Apple Intelligence on iPhone only logs meals and changes amounts, with lower accuracy. Choose ChatGPT in Settings → Coach AI for more.")
                         .font(.caption).foregroundStyle(Color.diarySecondary).accessibilityIdentifier("coachAppleLimits")
                 } else if coach.connection.planAuthorized {
@@ -904,7 +914,8 @@ struct CoachView: View {
         switch state {
         case .captured: String(localized: "Waiting to start")
         case .analyzing: String(localized: "Thinking…")
-        case .waitingForConnection: String(localized: "Connect ChatGPT in Settings to continue")
+        case .waitingForConnection: coach.connection.planNotEligible ? String(localized: "Your ChatGPT plan can’t be used in other apps.")
+            : String(localized: "Connect ChatGPT in Settings to continue")
         case .waitingForNetwork: String(localized: "Offline. I'll reply when you're back online.")
         case .needsRetry: String(localized: "Couldn't finish. Your message is saved.")
         case .needsClarification: String(localized: "I need a little more detail. Reply with it, or edit the record.")

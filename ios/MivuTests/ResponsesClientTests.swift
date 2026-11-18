@@ -427,6 +427,30 @@ struct ResponsesClientTests {
         }
     }
 
+    @Test func notEligibleForbiddenIsClassified() async throws {
+        let body = Data(#"{"error":{"code":"subscription_sharing_user_not_eligible","message":"Synthetic"}}"#.utf8)
+        await #expect(throws: ResponsesClient.Failure.notEligible) {
+            try await ResponsesClient(session: sessionReturning(status: 403, body: body)).run(model: "fixture-model", text: "Synthetic", image: nil, accessToken: "fixture-token")
+        }
+        await #expect(throws: ResponsesClient.Failure.notEligible) {
+            try await ResponsesClient(session: sessionReturning(status: 403, body: body)).models(accessToken: "fixture-token")
+        }
+    }
+
+    @Test(arguments: [Data(), Data(#"{"detail":"Synthetic region"}"#.utf8), Data("{bad".utf8)])
+    func plainForbiddenStaysForbidden(body: Data) async {
+        await #expect(throws: ResponsesClient.Failure.forbidden) {
+            try await ResponsesClient(session: sessionReturning(status: 403, body: body)).run(model: "fixture-model", text: "Synthetic", image: nil, accessToken: "fixture-token")
+        }
+    }
+
+    @Test func notEligibleStreamErrorIsClassified() async {
+        let failure = event(["type": "error", "error": ["code": "subscription_sharing_user_not_eligible"]])
+        await #expect(throws: ResponsesClient.Failure.notEligible) {
+            try await ResponsesClient(session: sessionReturning(status: 200, body: failure)).run(model: "fixture-model", text: "Synthetic", image: nil, accessToken: "fixture-token")
+        }
+    }
+
     @Test func rejectsInvalidCompletionAndEventNameMismatch() throws {
         for body in [event(["type": "response.completed", "response": ["status": "incomplete", "model": "fixture-model", "output": []]]), Data("event: error\n".utf8) + completed(), completed() + completed(), completed() + Data("data: {".utf8)] {
             var stream = ResponseEventStream()

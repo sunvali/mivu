@@ -335,8 +335,9 @@ extension ConnectionTests {
     let requests = ConnectionRequests()
     let jobStore: ProbeJobStore
     let connection: ChatGPTConnection
+    let session: URLSession
 
-    init(permission: Bool = true, response: (@Sendable (URLRequest) throws -> SessionReply)? = nil,
+    init(permission: Bool = true, appleAvailable: Bool = false, response: (@Sendable (URLRequest) throws -> SessionReply)? = nil,
          revocation: (@Sendable (URLRequest) throws -> SessionReply)? = nil) throws {
         preferences = UserDefaults(suiteName: preferencesName)!
         let saved = savedCredentials(now: .now, expired: false)
@@ -361,8 +362,15 @@ extension ConnectionTests {
             default: throw URLError(.badURL)
             }
         }
+        self.session = session
         connection = ChatGPTConnection(auth: AuthSession(session: session, store: store),
-            client: ResponsesClient(session: session), jobStore: jobStore, preferences: preferences)
+            client: ResponsesClient(session: session), jobStore: jobStore, preferences: preferences,
+            appleModelAvailable: { appleAvailable })
+    }
+    /// A second connection over the same saved state, as after a relaunch.
+    func relaunched() -> ChatGPTConnection {
+        ChatGPTConnection(auth: AuthSession(session: session, store: store), client: ResponsesClient(session: session),
+            jobStore: jobStore, preferences: preferences, appleModelAvailable: { false })
     }
     func cleanup() {
         try? FileManager.default.removeItem(at: directory)
@@ -673,5 +681,241 @@ extension ConnectionTests {
         #expect(!fixture.connection.isStorageUnavailable)
         #expect(fixture.connection.lastCompletedProbe == nil)
         #expect(fixture.connection.canCapture)
+    }
+}
+
+private func notEligibleReply() -> SessionReply {
+    SessionReply(status: 403, data: Data(#"{"error":{"code":"subscription_sharing_user_not_eligible","message":"Synthetic"}}"#.utf8))
+}
+
+extension ConnectionTests {
+    @Test func notEligibleResponseMarksPlanNotEligibleNotPermissionMissing() async throws {
+        let fixture = try ConnectionFixture(response: { _ in notEligibleReply() })
+        defer { fixture.cleanup() }
+        await fixture.connection.restore()
+        #expect(fixture.connection.captureSample())
+        await fixture.connection.waitForProbe()
+        #expect(fixture.connection.accountState == .planNotEligible)
+        #expect(fixture.connection.notice == nil)
+        #expect(fixture.preferences.string(forKey: "pausedRegistrationID") == nil)
+        #expect(fixture.preferences.string(forKey: "notEligibleRegistrationID") == fixture.credentials.registrationID)
+        #expect(fixture.connection.activeRegistrationID == fixture.credentials.registrationID)
+        #expect(try fixture.jobStore.load() != nil)
+    }
+
+    @Test func notEligibleSurvivesRestore() async throws {
+        let fixture = try ConnectionFixture(response: { _ in notEligibleReply() })
+        defer { fixture.cleanup() }
+        await fixture.connection.restore()
+        #expect(fixture.connection.captureSample())
+        await fixture.connection.waitForProbe()
+        let relaunched = fixture.relaunched()
+        await relaunched.restore()
+        #expect(relaunched.accountState == .planNotEligible)
+        #expect(relaunched.activeRegistrationID == fixture.credentials.registrationID)
+        #expect(!relaunched.canInfer)
+    }
+
+    @Test(arguments: [false, true])
+    func notEligibleFallsBackToAppleWhenAvailable(appleAvailable: Bool) async throws {
+        let fixture = try ConnectionFixture(appleAvailable: appleAvailable, response: { _ in notEligibleReply() })
+        defer { fixture.cleanup() }
+        fixture.preferences.set("chatGPT", forKey: "aiProvider")
+        await fixture.connection.restore()
+        #expect(fixture.connection.provider == .chatGPT)
+        #expect(fixture.connection.captureSample())
+        await fixture.connection.waitForProbe()
+        #expect(fixture.connection.provider == (appleAvailable ? .apple : .chatGPT))
+        #expect(fixture.connection.canInfer == appleAvailable)
+        #expect(fixture.connection.showsNotEligibleNotice == !appleAvailable)
+        fixture.connection.acknowledgeNotEligibleNotice()
+        #expect(!fixture.connection.showsNotEligibleNotice)
+    }
+}
+
+/// A full sign-in over synthetic OAuth, with a switchable plan scope and eligibility reply.
+@MainActor private final class EligibilitySignIn {
+    private final class Replies: @unchecked Sendable {
+        let lock = NSLock()
+        var scope = "openid offline_access resource.invoke chatgpt.tokens.use.direct"
+        var eligibility: @Sendable () throws -> SessionReply = { connectionCompletion() }
+    }
+    private let replies = Replies()
+    let signing: ConnectionSigningFixture
+    let requests = ConnectionRequests()
+    let store = ConnectionCredentialStore()
+    let preferences = UserDefaults(suiteName: UUID().uuidString)!
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let connection: ChatGPTConnection
+    private let session: URLSession
+
+    init(appleAvailable: Bool = false) throws {
+        let signing = try ConnectionSigningFixture(), replies = replies, requests = requests
+        self.signing = signing
+        let session = syntheticSession { request in
+            requests.append(request)
+            switch request.url?.path {
+            case "/api/accounts/oauth/token": return try tokenReply(idToken: signing.token(), scope: replies.lock.withLock { replies.scope })
+            case "/.well-known/jwks.json": return SessionReply(status: 200, data: signing.keys)
+            case "/v1/models": return connectionCatalog()
+            case "/v1/responses":
+                let body = String(decoding: try #require(request.httpBody), as: UTF8.self)
+                #expect(body.contains(EligibilityCheck.prompt))
+                #expect(!body.contains("\"tools\""))
+                return try replies.lock.withLock { replies.eligibility }()
+            case "/api/accounts/oauth/revoke": return SessionReply(status: 200, data: Data())
+            default: throw URLError(.badURL)
+            }
+        }
+        preferences.set(true, forKey: "openAISharingConsent")
+        self.session = session
+        connection = ChatGPTConnection(auth: AuthSession(session: session, store: store), client: ResponsesClient(session: session),
+            jobStore: ProbeJobStore(directory: directory), preferences: preferences, appleModelAvailable: { appleAvailable })
+    }
+    func set(scope: String? = nil, eligibility: (@Sendable () throws -> SessionReply)? = nil) {
+        replies.lock.withLock {
+            if let scope { replies.scope = scope }
+            if let eligibility { replies.eligibility = eligibility }
+        }
+    }
+    /// The same saved account in a fresh app launch.
+    func relaunched() -> ChatGPTConnection {
+        ChatGPTConnection(auth: AuthSession(session: session, store: store), client: ResponsesClient(session: session),
+            jobStore: ProbeJobStore(directory: directory), preferences: preferences, appleModelAvailable: { false })
+    }
+    var eligibilityRequests: Int { requests.values.filter { $0.url?.path == "/v1/responses" }.count }
+    func signIn() async {
+        let signing = signing
+        await connection.connect { url in
+            let query = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+            signing.setNonce(try #require(query.first { $0.name == "nonce" }?.value))
+            let redirect = try #require(query.first { $0.name == "redirect_uri" }?.value)
+            var callback = try #require(URLComponents(string: redirect))
+            callback.queryItems = [URLQueryItem(name: "state", value: try #require(query.first { $0.name == "state" }?.value)),
+                URLQueryItem(name: "code", value: "synthetic-code"), URLQueryItem(name: "client_id", value: "oaiapp_synthetic")]
+            _ = try await URLSession.shared.data(from: #require(callback.url))
+            throw CancellationError()
+        }
+    }
+    func cleanup() { try? FileManager.default.removeItem(at: directory) }
+}
+
+extension ConnectionTests {
+    @Test func paidSignInSendsOneEligibilityCheckAndStaysConnected() async throws {
+        let harness = try EligibilitySignIn(); defer { harness.cleanup() }
+        await harness.signIn()
+        #expect(harness.eligibilityRequests == 1)
+        #expect(harness.connection.accountState == .connected)
+        #expect(harness.connection.models.map(\.slug) == ["fixture-model", "second-model"])
+    }
+
+    @Test func freeSignInIsMarkedNotEligible() async throws {
+        let harness = try EligibilitySignIn(); defer { harness.cleanup() }
+        harness.set(eligibility: { notEligibleReply() })
+        await harness.signIn()
+        #expect(harness.connection.accountState == .planNotEligible)
+        #expect(harness.connection.activeRegistrationID != nil)
+        #expect(harness.connection.showsNotEligibleNotice)
+        #expect(harness.connection.notice == nil)
+    }
+
+    @Test(arguments: [false, true])
+    func transientEligibilityFailureLocksNothing(offline: Bool) async throws {
+        let harness = try EligibilitySignIn(); defer { harness.cleanup() }
+        harness.set(eligibility: {
+            if offline { throw URLError(.notConnectedToInternet) }
+            return SessionReply(status: 503, data: Data(#"{"error":{"code":"subscription_sharing_usage_unavailable"}}"#.utf8))
+        })
+        await harness.signIn()
+        #expect(harness.connection.accountState == .connected)
+        #expect(harness.preferences.string(forKey: "notEligibleRegistrationID") == nil)
+    }
+
+    @Test func recheckSuccessRestoresChatGPT() async throws {
+        let harness = try EligibilitySignIn(appleAvailable: true); defer { harness.cleanup() }
+        harness.set(eligibility: { notEligibleReply() })
+        await harness.signIn()
+        #expect(harness.connection.provider == .apple)
+        harness.set(eligibility: { connectionCompletion() })
+        await harness.connection.checkEligibility(force: true)
+        #expect(harness.connection.accountState == .connected)
+        #expect(harness.preferences.string(forKey: "notEligibleRegistrationID") == nil)
+        #expect(!harness.connection.models.isEmpty)
+        #expect(harness.connection.provider == .chatGPT)
+    }
+
+    @Test func secondConsentWithoutScopeIsNotEligible() async throws {
+        let harness = try EligibilitySignIn(); defer { harness.cleanup() }
+        harness.set(scope: "openid offline_access")
+        await harness.signIn()
+        #expect(harness.connection.accountState == .planPermissionMissing)
+        await harness.signIn()
+        #expect(harness.connection.accountState == .planNotEligible)
+        #expect(harness.eligibilityRequests == 0)
+    }
+
+    @Test func disconnectClearsNotEligibleFlags() async throws {
+        let harness = try EligibilitySignIn(); defer { harness.cleanup() }
+        harness.set(eligibility: { notEligibleReply() })
+        await harness.signIn()
+        harness.connection.acknowledgeNotEligibleNotice()
+        await harness.connection.disconnect()
+        #expect(harness.preferences.string(forKey: "notEligibleRegistrationID") == nil)
+        #expect(harness.preferences.string(forKey: "notEligibleNoticeSeenRegistrationID") == nil)
+    }
+}
+
+extension ConnectionTests {
+    @Test func restoreRechecksNotEligibleAccount() async throws {
+        let harness = try EligibilitySignIn(); defer { harness.cleanup() }
+        harness.set(eligibility: { notEligibleReply() })
+        await harness.signIn()
+        harness.set(eligibility: { connectionCompletion() })
+        let relaunched = harness.relaunched()
+        await relaunched.restore()
+        #expect(relaunched.accountState == .connected)
+        #expect(harness.eligibilityRequests == 2)
+    }
+
+    @Test func foregroundRecheckIsThrottled() async throws {
+        let harness = try EligibilitySignIn(); defer { harness.cleanup() }
+        harness.set(eligibility: { notEligibleReply() })
+        await harness.signIn()
+        let relaunched = harness.relaunched()
+        await relaunched.restore()
+        await relaunched.enterForeground()
+        await relaunched.enterForeground()
+        #expect(relaunched.accountState == .planNotEligible)
+        #expect(harness.eligibilityRequests == 2)
+    }
+
+    @Test func connectedAccountIsNotRecheckedOnOpen() async throws {
+        let harness = try EligibilitySignIn(); defer { harness.cleanup() }
+        await harness.signIn()
+        let relaunched = harness.relaunched()
+        await relaunched.restore()
+        await relaunched.enterForeground()
+        #expect(relaunched.accountState == .connected)
+        #expect(harness.eligibilityRequests == 1)
+    }
+}
+
+extension ConnectionTests {
+    @Test func planWelcomeWaitsForTheEligibilityCheck() async throws {
+        let harness = try EligibilitySignIn(); defer { harness.cleanup() }
+        let release = DispatchSemaphore(value: 0)
+        harness.set(eligibility: {
+            guard release.wait(timeout: .now() + 5) == .success else { throw URLError(.timedOut) }
+            return notEligibleReply()
+        })
+        let signIn = Task { await harness.signIn() }
+        for _ in 0..<2_000 where harness.eligibilityRequests == 0 { try await Task.sleep(for: .milliseconds(1)) }
+        #expect(harness.connection.isCheckingEligibility)
+        #expect(!harness.connection.showsPlanWelcome, "A Free account must not be welcomed to plan usage first")
+        release.signal()
+        await signIn.value
+        #expect(!harness.connection.isCheckingEligibility)
+        #expect(!harness.connection.showsPlanWelcome)
+        #expect(harness.connection.showsNotEligibleNotice)
     }
 }

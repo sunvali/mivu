@@ -694,6 +694,13 @@ enum DiaryLaunch {
     static var isCoachHistoryFixture: Bool { isCoachUITest && ProcessInfo.processInfo.arguments.contains("--coach-history-fixture") }
     #endif
     static var isCoachUITest: Bool { isUITest && ProcessInfo.processInfo.arguments.contains("--coach-ui-test") }
+    static var isPlanNotEligibleFixture: Bool {
+        #if DEBUG
+        isUITest && ProcessInfo.processInfo.arguments.contains("--plan-not-eligible-fixture")
+        #else
+        false
+        #endif
+    }
     static var isCoachInferenceFixture: Bool { isCoachUITest && ProcessInfo.processInfo.arguments.contains("--coach-inference-fixture") }
     static var isSampleMode: Bool {
         #if DEBUG

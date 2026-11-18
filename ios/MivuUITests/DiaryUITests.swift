@@ -182,6 +182,31 @@ import XCTest
         app.buttons["profileSettings"].tap()
         XCTAssertTrue(app.buttons["localProfiles"].label.contains("My diary"))
     }
+    func testSetupSkipsConnectForAPlanThatCannotBeUsed() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--onboarding-ui-test", "--plan-not-eligible-fixture", "--proof-english"]
+        app.launch()
+        let next = app.buttons["onboardingNext"]
+        XCTAssertTrue(next.waitForExistence(timeout: 10))
+        next.tap()
+        let height = app.textFields["onboardingHeight"]
+        XCTAssertTrue(height.waitForExistence(timeout: 5))
+        height.tap(); height.typeText("170")
+        app.buttons["keyboardNext"].tap(); app.typeText("80")
+        app.buttons["keyboardNext"].tap(); app.typeText("1990")
+        app.buttons["keyboardDone"].tap()
+        next.tap()
+        let target = app.textFields["onboardingTarget"]
+        XCTAssertTrue(target.waitForExistence(timeout: 5))
+        target.tap(); target.typeText("72")
+        app.buttons["keyboardDone"].tap()
+        next.tap() // goal, steady pace
+        next.tap() // diet
+        XCTAssertTrue(app.staticTexts["Estimate"].waitForExistence(timeout: 5), "Connect can never succeed for this account, so setup goes to the estimate")
+        XCTAssertFalse(app.buttons["onboardingSkipConnect"].exists)
+        next.tap()
+        XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 10), "Setup finishes without a ChatGPT connection")
+    }
     func testPrecisionGlassReferenceScreensInBothAppearances() {
         for mode in ["light", "dark"] {
             let app = launch(["--proof-" + mode])

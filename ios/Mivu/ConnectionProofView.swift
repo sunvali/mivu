@@ -124,6 +124,7 @@ struct ConnectionProofView: View {
         switch connection.accountState {
         case .connected: "Connected with plan permission"
         case .planPermissionMissing: "Signed in without plan permission"
+        case .planNotEligible: "Plan can't be used in other apps"
         default: "Not connected"
         }
     }

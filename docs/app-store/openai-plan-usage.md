@@ -75,5 +75,6 @@ Report Reply.
 
 - OpenAI describes this flow as a preview, and its terms may change. We will
   follow any update and change the app if needed.
-- Only eligible ChatGPT Go, Plus, Pro and Business accounts can use their
-  plan. Diary features work without any account.
+- OpenAI decides which ChatGPT plans can be used in other apps (currently Plus
+  and Pro). Other accounts can sign in; Mivu explains that the plan can't be
+  used, falls back to on-device AI where available, and the diary keeps working.

@@ -3,6 +3,8 @@ import SwiftUI
 enum MivuLinks {
     static let privacyPolicy = URL(string: "https://mivuapp.com/privacy")!
     static let chatGPTUsage = URL(string: "https://chatgpt.com/settings/usage")!
+    /// OpenAI's own explanation of which plans other apps may use.
+    static let chatGPTPlanHelp = URL(string: "https://help.openai.com/en/articles/20001542-using-your-chatgpt-plan-in-other-apps-and-sites")!
 
     /// App Review 1.2: a way to report an AI reply. The person sends the email themselves.
     static func reportReply(_ reply: String) -> URL {

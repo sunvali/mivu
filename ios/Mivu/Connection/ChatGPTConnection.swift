@@ -9,7 +9,7 @@ struct ProbeResult: Equatable, Sendable {
 }
 
 enum ProofState: Equatable {
-    case disconnected, connecting, connected, planPermissionMissing
+    case disconnected, connecting, connected, planPermissionMissing, planNotEligible
     case quotaReached, unavailable, queued, analyzing, completed, needsRetry
 }
 
@@ -45,6 +45,10 @@ final class ChatGPTConnection {
     private(set) var activeRegistrationID: String?
     var state: ProofState { inferenceState ?? accountState }
     var planAuthorized: Bool { accountState == .connected }
+    /// Signed in, but OpenAI says this account's plan can't be used in other apps.
+    var planNotEligible: Bool { accountState == .planNotEligible }
+    private(set) var planScopeGranted = false
+    private(set) var isCheckingEligibility = false
     var canCapture: Bool { isForeground && planAuthorized && !isStorageUnavailable && models.contains(where: { $0.slug == selectedModel }) && job == nil && !isConnecting && !isLoadingModels && !isDisconnecting }
     var canRetry: Bool {
         isForeground && planAuthorized && !isStorageUnavailable && job?.registrationID == activeRegistrationID && job?.state != .completed
@@ -61,6 +65,7 @@ final class ChatGPTConnection {
     @ObservationIgnored private var listener: LoopbackCallback?
     private var generation = 0
     @ObservationIgnored private var isForeground = true
+    @ObservationIgnored private var lastEligibilityCheck: Date?
 
     @ObservationIgnored private let appleModelAvailable: @Sendable () -> Bool
     @ObservationIgnored private let appleModelSupported: @Sendable () -> Bool
@@ -87,9 +92,9 @@ final class ChatGPTConnection {
         get {
             access(keyPath: \.provider)
             let stored = preferences.string(forKey: "aiProvider").flatMap(Provider.init)
-            if let stored, stored == .chatGPT || available(stored) { return stored }
+            if let stored, available(stored) || (stored == .chatGPT && !planNotEligible) { return stored }
             // Someone with a saved ChatGPT connection keeps it until they pick Apple, also while it restores at launch.
-            if stored == nil, planAuthorized || preferences.string(forKey: "selectedRegistrationID") != nil { return .chatGPT }
+            if stored == nil, !planNotEligible, planAuthorized || preferences.string(forKey: "selectedRegistrationID") != nil { return .chatGPT }
             return appleModelAvailable() ? .apple : .chatGPT
         }
         set { withMutation(keyPath: \.provider) { preferences.set(newValue.rawValue, forKey: "aiProvider") } }
@@ -134,6 +139,7 @@ final class ChatGPTConnection {
             apply(snapshot)
             updateSavedState()
             if planAuthorized { await loadModels() }
+            if planNotEligible { await checkEligibility() }
             guard revision == generation else { return }
             resumePending()
         } catch {
@@ -148,8 +154,19 @@ final class ChatGPTConnection {
 
     /// OpenAI's Sign in with ChatGPT guidelines: confirm plan use once, the first time it is enabled.
     private(set) var planWelcomeSeen: Bool
-    var showsPlanWelcome: Bool { provider == .chatGPT && planAuthorized && !planWelcomeSeen }
+    // Waits for the eligibility check, so a Free account is never welcomed to plan usage first.
+    var showsPlanWelcome: Bool { provider == .chatGPT && planAuthorized && !planWelcomeSeen && !isCheckingEligibility }
     func acknowledgePlanWelcome() { planWelcomeSeen = true; preferences.set(true, forKey: "chatGPTPlanWelcomeSeen") }
+
+    /// Explained once per account, and only when no on-device model takes over.
+    var showsNotEligibleNotice: Bool {
+        access(keyPath: \.showsNotEligibleNotice)
+        return planNotEligible && !appleModelAvailable()
+            && preferences.string(forKey: "notEligibleNoticeSeenRegistrationID") != activeRegistrationID
+    }
+    func acknowledgeNotEligibleNotice() {
+        withMutation(keyPath: \.showsNotEligibleNotice) { preferences.set(activeRegistrationID, forKey: "notEligibleNoticeSeenRegistrationID") }
+    }
 
     /// Signs in over whichever window is in front, so any screen can start it.
     func connect() async {
@@ -192,8 +209,9 @@ final class ChatGPTConnection {
             let returning = registrations.first { $0.id == selection }
             let redirect = try await callback.start()
             guard revision == generation else { return }
+            let askedConsent = returning != nil && (accountState == .planPermissionMissing || planNotEligible)
             var attempt = try OAuthAttempt.make(hostID: hostID, issuedClientID: returning?.issuedClientID,
-                callbackURL: redirect, requestPlanConsent: returning != nil && accountState == .planPermissionMissing)
+                callbackURL: redirect, requestPlanConsent: askedConsent)
             var code: AuthorizationCode?
             _ = try await callback.receive(validating: { code = try attempt.consumeCallback($0) },
                 openBrowser: openBrowser, browserURL: attempt.authorizationURL)
@@ -207,10 +225,15 @@ final class ChatGPTConnection {
             if preferences.string(forKey: "pausedRegistrationID") == snapshot.registrationID {
                 preferences.removeObject(forKey: "pausedRegistrationID")
             }
+            // Asked for plan permission twice and still refused: OpenAI won't share this plan, so stop offering Enable.
+            if snapshot.planPermissionGranted { preferences.removeObject(forKey: "notEligibleRegistrationID") }
+            else if askedConsent { preferences.set(snapshot.registrationID, forKey: "notEligibleRegistrationID") }
             apply(snapshot)
             models = []; selectedModel = ""
             let storageAvailable = reloadSavedJob()
             if planAuthorized { await loadModels() }
+            guard revision == generation else { return }
+            if planAuthorized { await checkEligibility(force: true) }
             guard revision == generation else { return }
             if storageAvailable { resumePending() }
         } catch {
@@ -248,6 +271,33 @@ final class ChatGPTConnection {
             guard revision == generation else { return }
             await reflectFailure(error, revision: revision)
         }
+    }
+
+    /// One tiny request that tells whether OpenAI lets this account's plan be used here; temporary failures change nothing.
+    func checkEligibility(force: Bool = false) async {
+        guard planNotEligible || accountState == .connected, planScopeGranted, let owner = activeRegistrationID, !isDisconnecting else { return }
+        if !force, let last = lastEligibilityCheck, Date.now.timeIntervalSince(last) < 900 { return }
+        lastEligibilityCheck = .now
+        let revision = generation
+        isCheckingEligibility = true
+        defer { isCheckingEligibility = false }
+        do {
+            let token = try await auth.accessToken(expectedRegistrationID: owner)
+            let catalog = models.isEmpty ? try await client.models(accessToken: token) : models
+            guard let model = catalog.first(where: { $0.slug == selectedModel })?.slug ?? catalog.first?.slug else { return }
+            _ = try await client.respond(model: model, input: [.message(role: .user, text: EligibilityCheck.prompt, images: [])],
+                                         toolNamespace: nil, accessToken: token)
+            guard revision == generation, planNotEligible else { return }
+            preferences.removeObject(forKey: "notEligibleRegistrationID")
+            apply(await auth.snapshot())
+            guard revision == generation, planAuthorized else { return }
+            models = catalog
+            if !catalog.contains(where: { $0.slug == selectedModel }) { selectedModel = catalog.first?.slug ?? "" }
+            resumePending()
+        } catch ResponsesClient.Failure.notEligible {
+            guard revision == generation else { return }
+            markNotEligible(await auth.snapshot())
+        } catch {}
     }
 
     @discardableResult
@@ -401,6 +451,10 @@ final class ChatGPTConnection {
         if outcome != nil, preferences.string(forKey: "selectedRegistrationID") == previousOwner {
             preferences.removeObject(forKey: "selectedRegistrationID")
         }
+        if outcome != nil {
+            preferences.removeObject(forKey: "notEligibleRegistrationID")
+            preferences.removeObject(forKey: "notEligibleNoticeSeenRegistrationID")
+        }
         await task?.value
         // No new probe can start while disconnecting; always settle its running flag.
         probeTask = nil; isAnalyzing = false
@@ -437,14 +491,20 @@ final class ChatGPTConnection {
         apply(snapshot)
         let storageAvailable = reloadSavedJob()
         if planAuthorized, models.isEmpty { await loadModels() }
+        if planNotEligible { await checkEligibility() }
         guard revision == generation else { return }
         if storageAvailable { resumePending() }
     }
 
     private func apply(_ snapshot: SessionSnapshot?) {
+        #if DEBUG
+        if isNotEligibleFixture { return }
+        #endif
         activeRegistrationID = snapshot?.registrationID
+        planScopeGranted = snapshot?.planPermissionGranted ?? false
         accountState = snapshot.map {
-            $0.planPermissionGranted && preferences.string(forKey: "pausedRegistrationID") != $0.registrationID
+            preferences.string(forKey: "notEligibleRegistrationID") == $0.registrationID ? .planNotEligible
+                : $0.planPermissionGranted && preferences.string(forKey: "pausedRegistrationID") != $0.registrationID
                 ? .connected : .planPermissionMissing
         } ?? .disconnected
         if !planAuthorized { models = []; selectedModel = ""; lastCompletedProbe = nil; inferenceState = nil }
@@ -497,7 +557,10 @@ final class ChatGPTConnection {
             if let job { preferences.set(job.id.uuidString, forKey: "quotaJobID") }
             inferenceState = .quotaReached; notice = .quota
         }
-        else if error as? ResponsesClient.Failure == .forbidden {
+        else if error as? ResponsesClient.Failure == .notEligible {
+            markNotEligible(snapshot)
+            notice = nil
+        } else if error as? ResponsesClient.Failure == .forbidden {
             pausePermission(snapshot)
             notice = .permission
         } else if error as? ResponsesClient.Failure == .unauthorized {
@@ -507,6 +570,20 @@ final class ChatGPTConnection {
             accountState = .disconnected; models = []; selectedModel = ""; notice = .revoked
         } else if error as? SessionError == .planPermissionMissing { accountState = .planPermissionMissing; notice = .permission }
         else { notice = job == nil ? .unavailable : .retry }
+    }
+
+    #if DEBUG
+    /// UI tests only: a signed-in account whose plan OpenAI won't share. It has no saved session, so lifecycle re-applies keep it.
+    @ObservationIgnored private var isNotEligibleFixture = false
+    func applyNotEligibleFixture() { isNotEligibleFixture = true; activeRegistrationID = "fixture-registration"; accountState = .planNotEligible }
+    #endif
+
+    private func markNotEligible(_ snapshot: SessionSnapshot?) {
+        guard let snapshot else { return pausePermission(nil) }
+        preferences.set(snapshot.registrationID, forKey: "notEligibleRegistrationID")
+        if preferences.string(forKey: "pausedRegistrationID") == snapshot.registrationID { preferences.removeObject(forKey: "pausedRegistrationID") }
+        accountState = .planNotEligible
+        models = []; selectedModel = ""; lastCompletedProbe = nil; inferenceState = nil
     }
 
     private func pausePermission(_ snapshot: SessionSnapshot?) {

@@ -54,7 +54,8 @@ struct SettingsView: View {
                     NavigationLink(value: SettingsSection.backup) { settingsRow(String(localized: "Backup & export"), symbol: "square.and.arrow.up", color: .diaryProtein) }
                     NavigationLink(value: SettingsSection.connection) {
                         settingsRow(String(localized: "Coach AI"), symbol: "sparkles", color: .diaryFat,
-                                    value: connection.provider == .apple ? String(localized: "Apple Intelligence") : connection.planAuthorized ? String(localized: "ChatGPT") : String(localized: "Connect ChatGPT"))
+                                    value: connection.provider == .apple ? String(localized: "Apple Intelligence") : connection.planAuthorized ? String(localized: "ChatGPT")
+                                        : connection.planNotEligible ? String(localized: "Plan unavailable") : String(localized: "Connect ChatGPT"))
                     }
                     NavigationLink(value: SettingsSection.nutritionSource) {
                         settingsRow(String(localized: "Nutrition source"), symbol: "fork.knife", color: .diaryCarbs, value: nutritionConfigured ? String(localized: "Configured") : String(localized: "Optional"))
@@ -250,18 +251,32 @@ struct SettingsView: View {
                     .pickerStyle(.inline).labelsHidden()
                 } header: { Text("Coach AI") } footer: {
                     switch connection.provider {
-                    case .apple: Text("Runs on this iPhone with no account, but estimates are much less accurate. It only logs meals and changes amounts; connect ChatGPT for accurate estimates, questions and other edits.")
-                    case .chatGPT: Text("Uses your ChatGPT Go, Plus or Pro plan. Coach messages and photos you send are shared with OpenAI.")
+                    case .apple:
+                        if connection.planNotEligible { Text("Using on-device AI. Your ChatGPT plan can’t be used in other apps.") }
+                        else { Text("Runs on this iPhone with no account, but estimates are much less accurate. It only logs meals and changes amounts; connect ChatGPT for accurate estimates, questions and other edits.") }
+                    case .chatGPT: Text("Uses your ChatGPT plan. Coach messages and photos you send are shared with OpenAI.")
                     }
                 }
                 if connection.provider == .chatGPT || connection.activeRegistrationID != nil {
                 Section("Connection") {
-                    Label(connection.planAuthorized ? "ChatGPT connected" : "Connect for meal analysis", systemImage: "person.crop.circle")
-                    Text("Coach analysis uses your selected ChatGPT account's plan allowance when eligible and is subject to its usage limits. Captures save locally without a connection.").font(.subheadline).foregroundStyle(Color.diarySecondary)
+                    if connection.planNotEligible { Label("ChatGPT plan unavailable", systemImage: "person.crop.circle") }
+                    else { Label(connection.planAuthorized ? "ChatGPT connected" : "Connect for meal analysis", systemImage: "person.crop.circle") }
+                    if connection.planNotEligible {
+                        Text("You’re signed in, but your ChatGPT plan can’t be used in other apps. You can keep logging meals by hand.").font(.subheadline).foregroundStyle(Color.diarySecondary)
+                        if connection.isCheckingEligibility { ProgressView("Checking").frame(minHeight: 44) }
+                        else {
+                            Button("Check again") {
+                                Task { if connection.planScopeGranted { await connection.checkEligibility(force: true) } else { await connection.connect() } }
+                            }.frame(minHeight: 44).disabled(connection.isConnecting || connection.isDisconnecting)
+                        }
+                        Link("Learn more", destination: MivuLinks.chatGPTPlanHelp).frame(minHeight: 44)
+                    } else {
+                        Text("Coach analysis uses your selected ChatGPT account's plan allowance when eligible and is subject to its usage limits. Captures save locally without a connection.").font(.subheadline).foregroundStyle(Color.diarySecondary)
+                    }
                     if connection.isConnecting {
                         ProgressView("Connecting")
                         Button("Cancel connection") { connection.cancelConnection() }.frame(minHeight: 44)
-                    } else {
+                    } else if !connection.planNotEligible {
                         ChatGPTConnectButton(connection: connection).frame(minHeight: 44)
                     }
                     if !connection.models.isEmpty {
@@ -273,7 +288,7 @@ struct SettingsView: View {
                         Button("Disconnect ChatGPT", role: .destructive) { Task { await connection.disconnect() } }.frame(minHeight: 44)
                     }
                     if let notice = connection.notice { Text(LocalizedStringKey(notice.rawValue)).font(.subheadline).foregroundStyle(Color.diarySecondary) }
-                    Link("Manage usage", destination: MivuLinks.chatGPTUsage).frame(minHeight: 44)
+                    if !connection.planNotEligible { Link("Manage usage", destination: MivuLinks.chatGPTUsage).frame(minHeight: 44) }
                     #if DEBUG
                     Button("ChatGPT connection diagnostic") { showConnectionDiagnostic = true }.frame(minHeight: 44)
                     #endif
