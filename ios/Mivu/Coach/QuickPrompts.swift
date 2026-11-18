@@ -11,11 +11,38 @@ enum MealSlot: String, Sendable {
 
     static func at(hour: Int) -> MealSlot { hour < 11 ? .breakfast : hour < 16 ? .lunch : .dinner }
 
-    var title: String {
+    // Whole phrases per slot rather than a slot word inside a sentence, so translations keep their grammar.
+    var logTitle: String {
+        switch self { case .breakfast: String(localized: "Log breakfast…"); case .lunch: String(localized: "Log lunch…"); case .dinner: String(localized: "Log dinner…") }
+    }
+    var fill: String {
+        switch self { case .breakfast: String(localized: "For breakfast I had "); case .lunch: String(localized: "For lunch I had "); case .dinner: String(localized: "For dinner I had ") }
+    }
+    func fill(_ foods: String) -> String {
         switch self {
-        case .breakfast: String(localized: "breakfast", comment: "Meal slot inside a sentence")
-        case .lunch: String(localized: "lunch", comment: "Meal slot inside a sentence")
-        case .dinner: String(localized: "dinner", comment: "Meal slot inside a sentence")
+        case .breakfast: String(localized: "For breakfast I had \(foods)")
+        case .lunch: String(localized: "For lunch I had \(foods)")
+        case .dinner: String(localized: "For dinner I had \(foods)")
+        }
+    }
+    var sameTitle: String {
+        switch self { case .breakfast: String(localized: "Same breakfast"); case .lunch: String(localized: "Same lunch"); case .dinner: String(localized: "Same dinner") }
+    }
+    var usualTitle: String {
+        switch self { case .breakfast: String(localized: "Usual breakfast"); case .lunch: String(localized: "Usual lunch"); case .dinner: String(localized: "Usual dinner") }
+    }
+    var smallerPortion: String {
+        switch self {
+        case .breakfast: String(localized: "Make breakfast a smaller portion: ")
+        case .lunch: String(localized: "Make lunch a smaller portion: ")
+        case .dinner: String(localized: "Make dinner a smaller portion: ")
+        }
+    }
+    var addDrink: String {
+        switch self {
+        case .breakfast: String(localized: "Add a drink to breakfast: ")
+        case .lunch: String(localized: "Add a drink to lunch: ")
+        case .dinner: String(localized: "Add a drink to dinner: ")
         }
     }
 }
@@ -41,7 +68,8 @@ struct QuickPrompt: Equatable, Identifiable, Sendable {
 
 /// What Coach replied last, when it is recent enough to suggest a next step.
 enum QuickPromptLatest: Equatable, Sendable {
-    case meal(id: UUID, committedRevision: Int, localDate: String)
+    /// The meal as the receipt committed it; edited since, its follow-ups no longer apply.
+    case meal(id: UUID, items: [CoachCommittedItem], localDate: String)
     case weight(localDate: String)
     case workout(localDate: String)
 }
@@ -71,14 +99,15 @@ enum QuickPrompts {
     static func choose(_ input: QuickPromptInput) -> [QuickPrompt] {
         var chips: [QuickPrompt] = []
         switch input.latest {
-        case .meal(let id, let revision, let date) where date == input.today:
-            if let meal = input.todaysMeals.first(where: { $0.id == id && $0.revision == revision }) {
-                let slot = MealSlot.at(hour: input.calendar.component(.hour, from: meal.eatenAt)).title
+        case .meal(let id, let committed, let date) where date == input.today:
+            if let meal = input.todaysMeals.first(where: { $0.id == id }),
+               meal.items.map({ [$0.id.uuidString, "\($0.quantity)", $0.unit] }) == committed.map({ [$0.itemID.uuidString, "\($0.quantity)", $0.unit] }) {
+                let slot = MealSlot.at(hour: input.calendar.component(.hour, from: meal.eatenAt))
                 chips = [calories(input),
                          QuickPrompt(id: "fix.portion", title: String(localized: "Smaller portion…"), symbol: "minus.circle",
-                                     action: .fill(String(localized: "Make \(slot) a smaller portion: "))),
+                                     action: .fill(slot.smallerPortion)),
                          QuickPrompt(id: "add.drink", title: String(localized: "Add a drink…"), symbol: "cup.and.saucer",
-                                     action: .fill(String(localized: "Add a drink to \(slot): ")))]
+                                     action: .fill(slot.addDrink))]
             } else { chips = slotChips(input) }
         case .weight(let date) where date == input.today:
             chips = [QuickPrompt(id: "ask.trend", title: String(localized: "Weekly trend?"), symbol: "chart.line.uptrend.xyaxis",
@@ -104,7 +133,7 @@ enum QuickPrompts {
         if let question = question(input) { chips.append(question) }
         chips.append(logged
             ? QuickPrompt(id: "log.snack", title: String(localized: "Log a snack…"), symbol: "fork.knife", action: .fill(String(localized: "For a snack I had ")))
-            : QuickPrompt(id: "log.slot", title: String(localized: "Log \(slot.title)…"), symbol: "fork.knife", action: .fill(String(localized: "For \(slot.title) I had "))))
+            : QuickPrompt(id: "log.slot", title: slot.logTitle, symbol: "fork.knife", action: .fill(slot.fill)))
         if !input.weighedToday && !input.morningCardShowing {
             chips.append(QuickPrompt(id: "log.weight", title: String(localized: "Log weight…"), symbol: "scalemass",
                                      action: .fill(String(localized: "My weight this morning is "))))
@@ -133,11 +162,12 @@ enum QuickPrompts {
 
     private static func relog(_ input: QuickPromptInput, slot: MealSlot) -> QuickPrompt? {
         let candidates = input.recent.filter {
-            $0.meal.isSaved && !$0.meal.items.isEmpty && MealSlot.at(hour: input.calendar.component(.hour, from: $0.meal.eatenAt)) == slot
+            // A date-only meal sits at the day's start, so its hour says nothing about the slot.
+            $0.meal.isSaved && !$0.meal.items.isEmpty && $0.meal.timePrecision != .dateOnly && MealSlot.at(hour: input.calendar.component(.hour, from: $0.meal.eatenAt)) == slot
         }
         let title: String, source: MealReadModel
         if let yesterday = candidates.first(where: { $0.localDate == input.yesterday }) {
-            title = String(localized: "Same \(slot.title)"); source = yesterday.meal
+            title = slot.sameTitle; source = yesterday.meal
         } else {
             // Candidates are newest first, so on a tie the group seen first is the most recent; its first meal is its newest.
             var groups: [String: [MealReadModel]] = [:], order: [String] = []
@@ -149,7 +179,7 @@ enum QuickPrompts {
             var best: [MealReadModel] = []
             for key in order where groups[key]!.count > best.count { best = groups[key]! }
             guard best.count >= 2 else { return nil }
-            title = String(localized: "Usual \(slot.title)"); source = best[0]
+            title = slot.usualTitle; source = best[0]
         }
         // The chip shows the meal's kcal, so every food must know its calories.
         guard source.items.allSatisfy({ $0.nutrition.kcal != nil }), let kcal = source.totals.kcal else { return nil }
@@ -158,7 +188,7 @@ enum QuickPrompts {
         }.joined(separator: ", ")
         let kcalValue = Int(kcal.rounded())
         return QuickPrompt(id: "relog", title: title, symbol: nil, kcal: kcalValue, photo: source.photos.first,
-                           action: .relog(mealID: source.id, text: String(localized: "For \(slot.title) I had \(foods)"),
+                           action: .relog(mealID: source.id, text: slot.fill(foods),
                                           excerpt: String(localized: "\(title) · \(kcalValue) kcal")))
     }
 

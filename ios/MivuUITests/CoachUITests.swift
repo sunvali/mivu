@@ -520,25 +520,116 @@ import XCTest
         XCTAssertTrue(app.staticTexts["Connect ChatGPT in Settings to continue"].waitForExistence(timeout: 10), "The photo-only turn is saved")
     }
 
-    func testStarterFillsDraftAndTrailingSlotSwapsMicForSend() {
+    private func quickPromptsApp(hour: Int = 8, id: String = UUID().uuidString, seed: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--proof-english"]
+        app.launchArguments = ["--diary-ui-test", id, "--coach-ui-test", "--coach-inference-fixture", "--proof-english", "--quick-prompts-hour", String(hour)]
+        if seed { app.launchArguments.append("--quick-prompts-fixture") }
         app.launch()
         XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        return app
+    }
+    private func chips(in app: XCUIApplication) -> XCUIElementQuery {
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "coachQuickPrompt-"))
+    }
+
+    func testQuickPromptFillDoesNotSendAndTrailingSlotSwapsMicForSend() {
+        let app = quickPromptsApp()
         XCTAssertTrue(app.buttons["coachVoice"].isHittable, "An empty draft offers voice in the trailing slot")
         XCTAssertFalse(app.buttons["coachSend"].exists)
         let strip = app.descendants(matching: .any)["coachCompanionStrip"].firstMatch
-        // The strip also holds Pip's bubble and day chip, so only its leading 112 points are Pip.
-        XCTAssertLessThanOrEqual(strip.frame.minX + 112, app.buttons["coachVoice"].frame.minX, "Pip stands on the flat field, not the round button")
         XCTAssertLessThanOrEqual(strip.frame.maxY, app.textFields["coachInput"].frame.minY, "Pip must not cover the field")
-        let starter = app.buttons["Log breakfast"]
-        XCTAssertTrue(starter.isHittable); XCTAssertGreaterThanOrEqual(starter.frame.height, 44)
-        starter.tap()
+        let fill = app.buttons["coachQuickPrompt-log.slot"]
+        XCTAssertTrue(fill.waitForExistence(timeout: 5)); XCTAssertTrue(fill.isHittable); XCTAssertGreaterThanOrEqual(fill.frame.height, 44)
+        XCTAssertLessThanOrEqual(chips(in: app).count, 4)
+        fill.tap()
         XCTAssertEqual(app.textFields["coachInput"].value as? String, "For breakfast I had ")
         XCTAssertTrue(app.buttons["coachSend"].waitForExistence(timeout: 3), "A draft swaps the mic for Send")
         XCTAssertFalse(app.buttons["coachVoice"].exists)
-        XCTAssertFalse(app.buttons["coachStarter"].exists, "Starters step aside while composing")
-        XCTAssertEqual(app.buttons.matching(identifier: "coachMealLink").count, 0, "A starter never sends by itself")
+        XCTAssertFalse(app.descendants(matching: .any)["coachQuickPrompts"].exists, "Chips step aside once the draft has text")
+        XCTAssertEqual(app.buttons.matching(identifier: "coachMealLink").count, 0, "A fill chip never sends by itself")
+    }
+
+    func testQuickPromptSendSendsTheQuestion() {
+        let app = quickPromptsApp()
+        let send = app.buttons["coachQuickPrompt-ask.yesterday"]
+        XCTAssertTrue(send.waitForExistence(timeout: 5)); send.tap()
+        XCTAssertTrue(ownReply(to: "How was yesterday?", in: app).exists)
+    }
+
+    func testQuickPromptsHideWhileTypingAndReturnWhenCleared() {
+        let app = quickPromptsApp()
+        let row = app.descendants(matching: .any)["coachQuickPrompts"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        enter("a", in: app)
+        XCTAssertTrue(row.waitForNonExistence(timeout: 3))
+        app.textFields["coachInput"].typeText(XCUIKeyboardKey.delete.rawValue)
+        XCTAssertTrue(row.waitForExistence(timeout: 3), "The row rides the keyboard while the box is empty")
+    }
+
+    func testQuickPromptsStepAsideForAClarification() {
+        let app = quickPromptsApp()
+        enter("clarify-options", in: app); app.buttons["coachSend"].tap()
+        XCTAssertTrue(app.buttons["coachOptionChip"].firstMatch.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.descendants(matching: .any)["coachQuickPrompts"].exists, "Answer chips own the moment")
+    }
+
+    func testHiddenSuggestionStaysHiddenAfterRelaunch() {
+        let id = UUID().uuidString
+        var app = quickPromptsApp(id: id)
+        let weight = app.buttons["coachQuickPrompt-log.weight"]
+        XCTAssertTrue(weight.waitForExistence(timeout: 5))
+        weight.press(forDuration: 1.2)
+        app.buttons["Hide this suggestion"].tap()
+        XCTAssertTrue(weight.waitForNonExistence(timeout: 3))
+        app.terminate(); app = quickPromptsApp(id: id)
+        XCTAssertTrue(app.buttons["coachQuickPrompt-log.slot"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["coachQuickPrompt-log.weight"].exists)
+    }
+
+    func testCollapseArrowHidesAndRestoresTheRow() {
+        let id = UUID().uuidString
+        var app = quickPromptsApp(id: id)
+        let collapse = app.buttons["coachQuickPromptsCollapse"]
+        XCTAssertTrue(collapse.waitForExistence(timeout: 5)); XCTAssertGreaterThanOrEqual(collapse.frame.height, 44)
+        collapse.tap()
+        XCTAssertTrue(app.buttons["coachQuickPromptsExpand"].waitForExistence(timeout: 3))
+        XCTAssertEqual(chips(in: app).count, 0)
+        app.terminate(); app = quickPromptsApp(id: id)
+        let expand = app.buttons["coachQuickPromptsExpand"]
+        XCTAssertTrue(expand.waitForExistence(timeout: 5), "Collapsed stays collapsed after relaunch")
+        expand.tap()
+        XCTAssertTrue(app.buttons["coachQuickPrompt-log.slot"].waitForExistence(timeout: 3))
+    }
+
+    func testSuggestionsSwitchTurnsTheRowOff() {
+        let app = quickPromptsApp()
+        XCTAssertTrue(app.descendants(matching: .any)["coachQuickPrompts"].waitForExistence(timeout: 5))
+        app.buttons["profileSettings"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        let toggle = app.switches["coachSuggestionsToggle"]
+        for _ in 0..<6 where !toggle.isHittable { app.swipeUp() }
+        XCTAssertEqual(toggle.value as? String, "1")
+        toggle.switches.firstMatch.tap()
+        XCTAssertEqual(toggle.value as? String, "0")
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.descendants(matching: .any)["coachQuickPrompts"].exists)
+        XCTAssertFalse(app.buttons["coachQuickPromptsExpand"].exists)
+    }
+
+    func testRelogChipCopiesYesterdaysLunch() {
+        let app = quickPromptsApp(hour: 13, seed: true)
+        let relog = app.buttons["coachQuickPrompt-relog"]
+        XCTAssertTrue(relog.waitForExistence(timeout: 5))
+        XCTAssertTrue(relog.label.contains("Same lunch") && relog.label.contains("420"), relog.label)
+        relog.tap()
+        XCTAssertEqual(app.textFields["coachInput"].value as? String, "For lunch I had Eggs 2 egg, Bread 3 slice, Salad 1 bowl")
+        XCTAssertTrue(app.descendants(matching: .any)["coachReplyBar"].exists, "The re-log quotes its source meal")
+        app.buttons["coachSend"].tap()
+        XCTAssertTrue(app.staticTexts["Logged it again."].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "420")).firstMatch.exists)
+        XCTAssertTrue(app.buttons["coachQuickPrompt-fix.portion"].waitForExistence(timeout: 5), "A fresh log offers its follow-ups")
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "coachQuickPrompt-")).firstMatch.identifier, "coachQuickPrompt-ask.calories")
     }
 
     private func enter(_ text: String, in app: XCUIApplication) {

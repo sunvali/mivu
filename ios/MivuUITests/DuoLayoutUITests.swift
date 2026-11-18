@@ -91,6 +91,17 @@ import XCTest
         XCTAssertFalse(app.buttons["coachFollowUp-today"].exists, "See today is redundant beside the live day")
     }
 
+    func testQuickPromptsShowTwoChipsSidewaysAndSkipCaloriesBesideTheDay() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture", "--proof-english",
+                               "--wide-layout-ui-test", "--quick-prompts-fixture", "--quick-prompts-hour", "13"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["coachQuickPrompt-ask.balanced"].waitForExistence(timeout: 5), "Beside the live day Coach asks what the day doesn't show")
+        XCTAssertFalse(app.buttons["coachQuickPrompt-ask.calories"].exists)
+        XCTAssertLessThanOrEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "coachQuickPrompt-")).count, 2)
+    }
+
     /// Coach with scripted replies. Sideways the pane sits left of the chat.
     private func launchCoach(wide: Bool = true) throws -> (XCUIApplication, XCUIElement) {
         let app = XCUIApplication()

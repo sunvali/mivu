@@ -15,6 +15,9 @@ struct QuickPromptsTests {
         return MealReadModel(id: id, dayID: UUID(), capturedAt: at(day, hour, minute), eatenAt: at(day, hour, minute), revision: revision,
                              timePrecision: nil, items: foods, submissions: [], photos: [], sourceTurnID: nil)
     }
+    private func committed(_ meal: MealReadModel) -> [CoachCommittedItem] {
+        meal.items.map { CoachCommittedItem(itemID: $0.id, name: $0.name, quantity: $0.quantity, unit: $0.unit) }
+    }
     private func recent(_ day: Int, _ meal: MealReadModel) -> RecentMeal { RecentMeal(localDate: "2026-11-\(day)", meal: meal) }
     private func input(hour: Int = 12, todaysMeals: [MealReadModel] = [], recent: [RecentMeal] = [], kcalTarget: Double? = 1600,
                        proteinEaten: Double? = nil, proteinTarget: Double? = nil, weighedToday: Bool = false,
@@ -45,7 +48,7 @@ struct QuickPromptsTests {
 
     @Test func afterAMealLogTheFollowUpsLeadWithTheQuestion() {
         let lunch = meal(hour: 13, minute: 10)
-        let chips = QuickPrompts.choose(input(hour: 13, todaysMeals: [lunch], latest: .meal(id: lunch.id, committedRevision: 1, localDate: "2026-11-17")))
+        let chips = QuickPrompts.choose(input(hour: 13, todaysMeals: [lunch], latest: .meal(id: lunch.id, items: committed(lunch), localDate: "2026-11-17")))
         #expect(chips.map(\.id) == ["ask.calories", "fix.portion", "add.drink"])
         #expect(chips[1].action == .fill("Make lunch a smaller portion: "))
         #expect(chips[2].action == .fill("Add a drink to lunch: "))
@@ -53,14 +56,16 @@ struct QuickPromptsTests {
 
     @Test func followUpsNeedTodaysExchange() {
         let lunch = meal(hour: 13)
-        let chips = QuickPrompts.choose(input(hour: 13, todaysMeals: [lunch], latest: .meal(id: lunch.id, committedRevision: 1, localDate: "2026-11-16")))
+        let chips = QuickPrompts.choose(input(hour: 13, todaysMeals: [lunch], latest: .meal(id: lunch.id, items: committed(lunch), localDate: "2026-11-16")))
         #expect(!chips.map(\.id).contains("fix.portion"))
         #expect(chips.map(\.id).contains("log.snack"))
     }
 
     @Test func changedMealDropsItsFollowUps() {
-        let lunch = meal(hour: 13, revision: 2)
-        let chips = QuickPrompts.choose(input(hour: 13, todaysMeals: [lunch], latest: .meal(id: lunch.id, committedRevision: 1, localDate: "2026-11-17")))
+        var lunch = meal(hour: 13)
+        let receipt = committed(lunch)
+        lunch.items[0].quantity = 2
+        let chips = QuickPrompts.choose(input(hour: 13, todaysMeals: [lunch], latest: .meal(id: lunch.id, items: receipt, localDate: "2026-11-17")))
         #expect(!chips.map(\.id).contains("fix.portion"))
     }
 
@@ -115,6 +120,12 @@ struct QuickPromptsTests {
         #expect(QuickPrompts.choose(input(hour: 13, latest: .workout(localDate: "2026-11-17"))).map(\.id).first == "ask.calories")
     }
 
+    @Test func dateOnlyMealsAreNotReloggedForASlot() {
+        var source = meal(day: 16, hour: 0)
+        source.timePrecision = .dateOnly
+        #expect(!QuickPrompts.choose(input(hour: 8, recent: [recent(16, source)])).map(\.id).contains("relog"))
+    }
+
     @Test func mealWithoutKnownCaloriesIsNotOffered() {
         let source = meal(day: 16, hour: 8, kcal: nil)
         #expect(!QuickPrompts.choose(input(hour: 8, recent: [recent(16, source)])).map(\.id).contains("relog"))
@@ -124,7 +135,7 @@ struct QuickPromptsTests {
         let lunch = meal(hour: 13)
         let cases = [
             input(hour: 8, recent: [recent(16, meal(day: 16, hour: 8))]), input(hour: 13), input(hour: 20, proteinEaten: 1, proteinTarget: 100),
-            input(hour: 13, todaysMeals: [lunch], latest: .meal(id: lunch.id, committedRevision: 1, localDate: "2026-11-17")),
+            input(hour: 13, todaysMeals: [lunch], latest: .meal(id: lunch.id, items: committed(lunch), localDate: "2026-11-17")),
             input(hour: 13, wide: true), input(hour: 8, latest: .weight(localDate: "2026-11-17")), input(hour: 13, todaysMeals: [lunch]),
             input(hour: 20, recent: [recent(10, meal(day: 10, hour: 19)), recent(12, meal(day: 12, hour: 19))])
         ]
@@ -136,7 +147,7 @@ struct QuickPromptsTests {
         let lunch = meal(hour: 13)
         let cases = [input(hour: 8), input(hour: 13), input(hour: 20, proteinEaten: 1, proteinTarget: 100), input(hour: 13, wide: true),
                      input(hour: 8, latest: .weight(localDate: "2026-11-17")),
-                     input(hour: 13, todaysMeals: [lunch], latest: .meal(id: lunch.id, committedRevision: 1, localDate: "2026-11-17"))]
+                     input(hour: 13, todaysMeals: [lunch], latest: .meal(id: lunch.id, items: committed(lunch), localDate: "2026-11-17"))]
         for chip in cases.flatMap({ QuickPrompts.choose($0) }) {
             if case .send(let text) = chip.action { #expect(approved.contains(text)) }
         }

@@ -95,7 +95,6 @@ enum CoachUITestInference {
         let id = UUID().uuidString
         return CoachInferenceResult(model: "native-test-fixture", text: "", calls: [CoachToolCall(id: id, callID: id, name: name, namespace: "mivu", arguments: argumentsJSON)], outputItems: [])
     }
-    /// Scenarios "clarify-candidates" / "clarify-confirm": ask on the first turn, resolve against pendingQuestion on the next.
     /// A quick-prompt re-log quotes the saved meal: read it, then copy it unchanged.
     private static func relog(_ input: [CoachInferenceInput], context: CoachContext, source: UUID) throws -> CoachInferenceResult {
         let outputs = input.compactMap { value -> String? in if case .functionOutput(_, let text) = value { return text }; return nil }
@@ -114,6 +113,7 @@ enum CoachUITestInference {
         default: return CoachInferenceResult(model: "native-test-fixture", text: "Logged it again.", calls: [], outputItems: [])
         }
     }
+    /// Scenarios "clarify-candidates" / "clarify-confirm": ask on the first turn, resolve against pendingQuestion on the next.
     private static func clarification(_ input: [CoachInferenceInput], context: CoachContext) throws -> CoachInferenceResult? {
         let last = input.reversed().compactMap { entry -> String? in
             if case .message(role: .user, let text, _) = entry { return text.lowercased() }; return nil
