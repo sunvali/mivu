@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 import TipKit
 import WidgetKit
@@ -26,7 +27,8 @@ struct SnapItTip: Tip {
 
     /// Someone who already placed the control needs no tip.
     static func refreshControlAdded() async {
-        guard let controls = try? await ControlCenter.shared.currentControls() else { return }
+        // UI tests must not depend on which controls the simulator happens to have placed.
+        guard !DiaryLaunch.isUITest, let controls = try? await ControlCenter.shared.currentControls() else { return }
         controlAdded = controls.contains { $0.kind == LogFoodIntent.controlKind }
     }
 }
@@ -57,52 +59,107 @@ struct SnapItTipStyle: TipViewStyle {
 }
 
 struct SnapItShortcutsView: View {
+    private enum Place: String, CaseIterable, Identifiable {
+        case lockScreen = "lock-screen", controlCenter = "control-center", actionButton = "action-button"
+        var id: Self { self }
+        var title: LocalizedStringKey {
+            switch self {
+            case .lockScreen: "Lock Screen"
+            case .controlCenter: "Control Center"
+            case .actionButton: "Action button"
+            }
+        }
+        var steps: [LocalizedStringKey] {
+            switch self {
+            case .lockScreen: ["Touch and hold the Lock Screen and tap Customize. If asked, choose Lock Screen.",
+                               "Remove one of the bottom buttons, then tap +.", "Search for Snap It."]
+            case .controlCenter: ["Swipe down from the top-right corner.",
+                                  "Touch and hold an empty area, then tap Add a Control.", "Search for Snap It."]
+            case .actionButton: ["Open Settings and tap Action Button.",
+                                 "Swipe to Controls and tap Choose a Control.", "Search for Snap It."]
+            }
+        }
+    }
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var place = Place.lockScreen
+    @State private var playing = true
     var body: some View {
         NavigationStack {
             List {
                 Section {
                     Text("Open the camera straight from your iPhone, without opening Mivu first.")
                         .font(.subheadline).foregroundStyle(Color.diarySecondary)
-                        .listRowBackground(Color.clear).listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
+                    Picker("Place", selection: $place) {
+                        ForEach(Place.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented).accessibilityIdentifier("snapItPlace")
+                    video
                 }
-                steps("Lock Screen", symbol: "lock.fill", [
-                    "Touch and hold the Lock Screen and tap Customize. If asked, choose Lock Screen.",
-                    "Remove one of the bottom buttons, then tap +.",
-                    "Search for Snap It.",
-                ])
-                steps("Control Center", symbol: "switch.2", [
-                    "Swipe down from the top-right corner.",
-                    "Touch and hold an empty area, then tap Add a Control.",
-                    "Search for Snap It.",
-                ])
-                steps("Action button", symbol: "button.programmable", [
-                    "Open Settings and tap Action Button.",
-                    "Swipe to Controls and tap Choose a Control.",
-                    "Search for Snap It.",
-                ], footer: "On iPhone 15 Pro and later.")
+                .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 6, leading: 4, bottom: 6, trailing: 4))
+                Section {
+                    ForEach(place.steps.indices, id: \.self) { index in
+                        // Not a Label: at accessibility sizes a Label drops its text under the number and the list stops reading as steps.
+                        HStack(alignment: .firstTextBaseline, spacing: 12) {
+                            Image(systemName: "\(index + 1).circle.fill").foregroundStyle(Color.diaryAccent).accessibilityHidden(true)
+                            Text(place.steps[index])
+                        }
+                        .frame(minHeight: 44)
+                    }
+                } footer: {
+                    if place == .actionButton { Text("On iPhone 15 Pro and later.") }
+                }
             }
             .navigationTitle("Snap It shortcuts")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.accessibilityIdentifier("doneSnapItShortcuts") } }
+            .onAppear { playing = !reduceMotion }
         }
         .tint(.diaryAccent)
     }
 
-    private func steps(_ title: LocalizedStringKey, symbol: String, _ steps: [LocalizedStringKey], footer: LocalizedStringKey? = nil) -> some View {
-        Section {
-            ForEach(steps.indices, id: \.self) { index in
-                // Not a Label: at accessibility sizes a Label drops its text under the number and the list stops reading as steps.
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Image(systemName: "\(index + 1).circle.fill").foregroundStyle(Color.diaryAccent).accessibilityHidden(true)
-                    Text(steps[index])
+    /// A screen recording of the steps below; tap to pause, and it waits for a tap when Reduce Motion is on.
+    private var video: some View {
+        Button { playing.toggle() } label: {
+            LoopingVideo(name: "snap-it-\(place.rawValue)", playing: playing).id(place)
+                .aspectRatio(600.0 / 1304.0, contentMode: .fit)
+                .clipShape(.rect(cornerRadius: 24))
+                .overlay { RoundedRectangle(cornerRadius: 24).strokeBorder(Color.diaryRule, lineWidth: 1) }
+                .overlay {
+                    if !playing {
+                        Image(systemName: "play.fill").font(.title).foregroundStyle(.white)
+                            .frame(width: 64, height: 64).background(.black.opacity(0.55), in: .circle)
+                    }
                 }
-                .frame(minHeight: 44)
-            }
-        } header: {
-            Label(title, systemImage: symbol)
-        } footer: {
-            if let footer { Text(footer) }
+                .frame(maxWidth: .infinity).frame(height: 320)
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("How-to video").accessibilityValue(playing ? Text("Playing") : Text("Paused"))
+        .accessibilityIdentifier("snapItVideo")
+    }
+}
+
+/// A silent clip that loops; it has no audio track, so it never interrupts the user's music.
+private struct LoopingVideo: UIViewRepresentable {
+    let name: String
+    let playing: Bool
+    final class PlayerView: UIView {
+        override static var layerClass: AnyClass { AVPlayerLayer.self }
+        let player = AVQueuePlayer()
+        var looper: AVPlayerLooper?
+    }
+    func makeUIView(context: Context) -> PlayerView {
+        let view = PlayerView()
+        view.player.isMuted = true
+        view.player.preventsDisplaySleepDuringVideoPlayback = false
+        (view.layer as? AVPlayerLayer)?.player = view.player
+        if let url = Bundle.main.url(forResource: name, withExtension: "mp4") {
+            view.looper = AVPlayerLooper(player: view.player, templateItem: AVPlayerItem(url: url))
+        }
+        return view
+    }
+    func updateUIView(_ view: PlayerView, context: Context) {
+        if playing { view.player.play() } else { view.player.pause() }
     }
 }

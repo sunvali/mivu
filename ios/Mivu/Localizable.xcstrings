@@ -610,6 +610,29 @@
         }
       }
     },
+    "How-to video" : {
+      "comment" : "Accessibility label of a screen recording that shows the steps",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "סרטון הדרכה"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vídeo explicativo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обучающее видео"
+          }
+        }
+      }
+    },
     "Keep %@" : {
       "comment" : "Toast button: keep the previous time zone; %@ is a city name",
       "localizations" : {
@@ -1077,6 +1100,75 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Открывает форму для ввода питательных данных."
+          }
+        }
+      }
+    },
+    "Paused" : {
+      "comment" : "Accessibility value: the video is paused",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מושהה"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En pausa"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пауза"
+          }
+        }
+      }
+    },
+    "Place" : {
+      "comment" : "Accessibility label of the picker between Lock Screen, Control Center and Action button",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מיקום"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lugar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Место"
+          }
+        }
+      }
+    },
+    "Playing" : {
+      "comment" : "Accessibility value: the video is playing",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מתנגן"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reproduciendo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Воспроизводится"
           }
         }
       }
