@@ -232,13 +232,7 @@ struct ProgressMacrosCard: View {
                         .font(.system(size: 44, weight: .bold)).tracking(-1.5).monospacedDigit().foregroundStyle(Color.diaryText)
                     Text("kcal on an average day").font(.subheadline).foregroundStyle(Color.diaryText)
                 }
-                HStack(spacing: 8) {
-                    metric("Protein", snapshot.averages.protein, .diaryProtein)
-                    Divider().frame(height: 32)
-                    metric("Carbs", snapshot.averages.carbs, .diaryCarbs)
-                    Divider().frame(height: 32)
-                    metric("Fat", snapshot.averages.fat, .diaryFat)
-                }
+                DiaryMacroRow(protein: snapshot.averages.protein, carbs: snapshot.averages.carbs, fat: snapshot.averages.fat)
             } else {
                 ProgressPlaceholder(symbol: "fork.knife", text: String(localized: "Log a full day to see your average day."))
             }
@@ -250,10 +244,6 @@ struct ProgressMacrosCard: View {
             }
         }
         .diaryProgressCard()
-    }
-
-    private func metric(_ title: LocalizedStringKey, _ grams: Double?, _ color: Color) -> some View {
-        DiaryMetric(title: title, value: grams.map { String(localized: "\($0.formatted(.number.precision(.fractionLength(0)))) g") }, color: color)
     }
 }
 
