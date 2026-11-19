@@ -579,9 +579,12 @@ struct CoachView: View {
             if let reply = coach.attachmentDraft.reply { replyBar(reply) }
             HStack(alignment: .bottom, spacing: 0) {
                 // Stacked, not overlaid, so the field grows to fit the words plus the wave while listening.
-                ZStack(alignment: .leading) {
+                ZStack(alignment: .topLeading) {
+                    // `placeholder` draws the prompt: the field's own keeps to one line and cuts longer translations at large text.
+                    // Behind the field, so the field keeps its own touches (long-press Paste) and only a wrapped line below it falls through.
+                    if !listening && coach.attachmentDraft.text.isEmpty { placeholder }
                     TextField("Describe a meal…", text: Binding(get: { coach.attachmentDraft.text }, set: { coach.attachmentDraft.text = $0 }),
-                              prompt: Text(listening ? "" : String(localized: "Describe a meal…")), axis: .vertical)
+                              prompt: Text(""), axis: .vertical)
                         // Grows to four lines (three at accessibility sizes), then scrolls inside the field.
                         .lineLimit(1...(typeSize.isAccessibilitySize ? 3 : 4)).focused($editing)
                         .accessibilityIdentifier("coachInput")
@@ -761,6 +764,13 @@ struct CoachView: View {
             coach.attachmentDraft.text = text; sendTaps += 1
             Task { _ = await coach.send() }
         }
+    }
+    private var placeholder: some View {
+        Text("Describe a meal…").foregroundStyle(Color(uiColor: .placeholderText))
+            .lineLimit(typeSize.isAccessibilitySize ? 3 : 4)
+            .padding(.leading, 16).padding(.vertical, 10)
+            // A wrapped prompt reaches below the one-line field, so taps there start typing too.
+            .contentShape(.rect).onTapGesture { editing = true }.accessibilityHidden(true)
     }
     /// While listening, the words stream in with a three-line sound wave as their cursor.
     /// Taps fall through to the hidden field, so tapping to type stops listening.
