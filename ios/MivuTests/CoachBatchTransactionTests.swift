@@ -376,6 +376,14 @@ import Testing
         #expect(throws: DiaryError.wrongOwner) { try f.database.hasDays(before: "2027-01-01", expectedProfileID: UUID()) }
     }
 
+    @Test func loggedDayCountSkipsPendingMeals() throws {
+        var source = progressSource(offsets: [3, 2, 1])
+        source.meals[1].revision = 0
+        let f = try BatchFixture(source: source); defer { f.remove() }
+        #expect(try f.database.loggedDayCount(expectedProfileID: f.owner) == 2)
+        #expect(throws: DiaryError.wrongOwner) { try f.database.loggedDayCount(expectedProfileID: UUID()) }
+    }
+
     @Test func topFoodsSkipsUnknownAndPending() throws {
         var source = progressSource(offsets: [2, 1]) { offset in
             offset == 2 ? [FoodItem(name: "Mystery stew", nutrition: NutritionValues(kcal: nil)), FoodItem(name: "Toast", nutrition: NutritionValues(kcal: 90))]

@@ -969,6 +969,29 @@
         }
       }
     },
+    "Rate Mivu" : {
+      "comment" : "Settings link that opens the App Store page to rate and review the app",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "דירוג Mivu"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Valorar Mivu"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Оценить Mivu"
+          }
+        }
+      }
+    },
     "Same breakfast" : {
       "comment" : "Coach quick-prompt chip: log yesterday's breakfast again",
       "localizations" : {

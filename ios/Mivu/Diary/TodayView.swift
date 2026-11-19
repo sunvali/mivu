@@ -1,5 +1,6 @@
 import SwiftUI
 import Observation
+import StoreKit
 
 @MainActor @Observable final class DiarySettingsRouteOwner {
     struct Route: Identifiable { let id = UUID(); let destination: CoachDestination? }
@@ -108,6 +109,7 @@ struct DiaryRootView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openURL) private var openURL
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.requestReview) private var requestReview
     @AppStorage("diarySelectedTab") private var restoredTab = "today"
     private let nutritionKeys: NutritionAPIKeyStore
     private var services: MivuServices
@@ -273,11 +275,11 @@ struct DiaryRootView: View {
             companion.characterChanged(now: Date())
             refreshCompanion()
         }
-        .onChange(of: model.companionCaptureEvent) { _, event in receiveCompanionEvent(event) }
+        .onChange(of: model.companionCaptureEvent) { _, event in receiveCompanionEvent(event); considerRating(after: event) }
         .onChange(of: model.companionHabitEvent) { _, event in receiveCompanionEvent(event) }
         .onChange(of: model.companionReviewEvent) { _, event in receiveCompanionEvent(event) }
         .onChange(of: coach.companionSubmission) { _, _ in receiveCompanionSubmission() }
-        .onChange(of: coach.companionCaptureEvent) { _, event in receiveCompanionEvent(event) }
+        .onChange(of: coach.companionCaptureEvent) { _, event in receiveCompanionEvent(event); considerRating(after: event) }
         .onChange(of: coach.companionPhotoEvent) { _, event in receiveCompanionEvent(event) }
         .onChange(of: [coach.isSending, coach.companionNeedsRecovery, coach.companionIsProcessing]) { _, _ in refreshCompanion() }
         .onReceive(NotificationCenter.default.publisher(for: ProcessInfo.thermalStateDidChangeNotification).receive(on: RunLoop.main)) { _ in
@@ -571,6 +573,22 @@ struct DiaryRootView: View {
         receiveCompanionSubmission()
         companion.receive(event, now: Date())
         refreshCompanion()
+    }
+    /// A save is the happy moment; wait past Pip's reaction and skip (without recording) when anything else is going on.
+    private func considerRating(after event: CompanionEvent?) {
+        guard let event, event.kind == .saved, !model.sampleMode, !DiaryLaunch.isUITest else { return }
+        Task {
+            try? await Task.sleep(for: .seconds(1))
+            guard phase == .active, !model.isChangingProfile, event.profileID == model.readModel?.profile.id, !coach.isSending,
+                  selectedCompanionSurface != nil,
+                  let days = try? await model.store.loggedDayCount(expectedProfileID: event.profileID) else { return }
+            let rating = RatingPrompt(defaults: DiaryLaunch.defaults)
+            // Checked last: any sheet or cover, including ones Today's subviews own, may have opened during the wait.
+            let presenting = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first?.rootViewController?.presentedViewController
+            guard presenting == nil, rating.shouldAsk(loggedDays: days) else { return }
+            rating.recordAsk(loggedDays: days)
+            requestReview()
+        }
     }
     private func receiveCompanionSubmission() {
         guard phase == .active, !model.isChangingProfile, let submission = coach.companionSubmission,
