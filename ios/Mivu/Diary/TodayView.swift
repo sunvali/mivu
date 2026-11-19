@@ -580,11 +580,12 @@ struct DiaryRootView: View {
         Task {
             try? await Task.sleep(for: .seconds(1))
             guard phase == .active, !model.isChangingProfile, event.profileID == model.readModel?.profile.id, !coach.isSending,
-                  selectedCompanionSurface != nil, routes.route == nil, coachHistory == nil, !showOnboarding,
-                  quickLogOwner == nil, !quickLogEarly, noteMealID == nil, notifiedMealID == nil,
+                  selectedCompanionSurface != nil,
                   let days = try? await model.store.loggedDayCount(expectedProfileID: event.profileID) else { return }
             let rating = RatingPrompt(defaults: DiaryLaunch.defaults)
-            guard rating.shouldAsk(loggedDays: days) else { return }
+            // Checked last: any sheet or cover, including ones Today's subviews own, may have opened during the wait.
+            let presenting = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first?.rootViewController?.presentedViewController
+            guard presenting == nil, rating.shouldAsk(loggedDays: days) else { return }
             rating.recordAsk(loggedDays: days)
             requestReview()
         }
