@@ -589,9 +589,12 @@ import XCTest
         var app = quickPromptsApp(id: id)
         let collapse = app.buttons["coachQuickPromptsCollapse"]
         XCTAssertTrue(collapse.waitForExistence(timeout: 5)); XCTAssertGreaterThanOrEqual(collapse.frame.height, 44)
+        let field = app.descendants(matching: .any)["coachInput"]
         collapse.tap()
         XCTAssertTrue(app.buttons["coachQuickPromptsExpand"].waitForExistence(timeout: 3))
         XCTAssertEqual(chips(in: app).count, 0)
+        // The tray shrinks to the field: the arrow moves beside it instead of keeping the row's band.
+        XCTAssertEqual(app.buttons["coachQuickPromptsExpand"].frame.midY, field.frame.midY, accuracy: 12)
         app.terminate(); app = quickPromptsApp(id: id)
         let expand = app.buttons["coachQuickPromptsExpand"]
         XCTAssertTrue(expand.waitForExistence(timeout: 5), "Collapsed stays collapsed after relaunch")
