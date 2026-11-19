@@ -18,7 +18,7 @@ Toma una foto, cuéntale a Pip lo que comiste o escríbelo. Pip y Coach lo convi
 
 ## Keywords (100, comma-separated, no spaces)
 
-calorías,contador de calorías,diario de comidas,dieta,macros,proteínas,nutrición,peso,bajar de peso
+calorías,contador de calorías,conteo de calorías,dieta,macros,proteínas,nutrición,peso,bajar de peso
 
 ## Description (4000)
 

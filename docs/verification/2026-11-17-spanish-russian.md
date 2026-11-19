@@ -54,6 +54,10 @@ A final native Russian pass after these changes found 1 error («Коуч нуж
 коучу», and «дневник на этом iPhone» in place of «личный локальный дневник»); all
 7 applied. Its one code note was wrong (the label it called unused is used).
 
+Two more Spanish final passes (Mexico City; a US Hispanic reader) found 0 errors.
+The only change: the listing keyword "diario de comidas", already in the name,
+became "conteo de calorías".
+
 ## Code changes found by the review
 
 - The calorie band "Off" had the same key as the switched-off status, so it read
