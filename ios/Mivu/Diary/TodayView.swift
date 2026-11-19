@@ -438,6 +438,7 @@ struct DiaryRootView: View {
         return ViewThatFits(in: .horizontal) {
             HStack(spacing: 12) { globe; now.fixedSize(); Spacer(minLength: 8); keep.fixedSize() }
             VStack(alignment: .leading, spacing: 0) { HStack(alignment: .firstTextBaseline, spacing: 12) { globe; now }; keep }
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.leading, 16).padding(.trailing, 12).padding(.vertical, 6)
         .background(Color.diarySurface, in: .rect(cornerRadius: 28, style: .continuous))
