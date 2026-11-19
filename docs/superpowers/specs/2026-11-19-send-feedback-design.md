@@ -1,6 +1,6 @@
 # Send feedback: design
 
-Date: 2026-11-19. Base: `origin/main` at `0fcceeee`. Status: awaiting owner approval.
+Date: 2026-11-19. Base: `origin/main` at `0fcceeee`. Status: approved by the owner, amended the same day (see Amendments).
 
 ## Why
 
@@ -135,3 +135,24 @@ endpoint that does not exist.
 Visual layout within the app's existing Settings style, exact wording, the
 thank-you treatment, the Lambda runtime, and how the endpoint URL is configured
 in the app.
+
+## Amendments (2026-11-19, during the build)
+
+1. **Server (owner decision):** the existing Cloudflare worker `mivu-reports` at
+   `reports.mivuapp.com` (repo `mivu-infra`) gains a `POST /feedback` route. It
+   replaces the Lambda and SES everywhere above, so nothing in AWS needs
+   unblocking and no SES setup is needed. The worker already emails the owner's
+   inbox and is rate limited; it costs nothing on the Cloudflare free plan. The
+   owner applies it with terraform, then one configuration value in the app
+   switches Send to the direct path. Request fields, limits and responses are
+   unchanged.
+2. **Coach link (builder's call):** Coach offers the existing Settings link and
+   tells the person to tap Send feedback under Support, instead of a link that
+   opens the form directly. A direct link needs a new value in the Coach
+   destination that is stored in diary backups, which Android and older iOS
+   versions read strictly, so a backup could become unreadable there. A direct
+   link can follow with a backup-format change coordinated with Android.
+3. **Report this problem (builder's call):** shown only on a turn that failed
+   and needs a retry, not while Coach is waiting for the network or sign-in.
+4. **Email rule (builder's call):** plain ASCII addresses only, the same rule
+   in the app and the worker, because the address becomes a Reply-To header.

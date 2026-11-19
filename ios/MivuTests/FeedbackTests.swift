@@ -53,10 +53,13 @@ private final class FeedbackStub: URLProtocol, @unchecked Sendable {
     func rejectsMessage(_ m: String) {
         #expect(FeedbackReport(kind: .bug, message: m, email: "", diagnostics: d, context: nil) == nil)
     }
+    @Test func limitCountsTheWayTheServerDoes() {
+        #expect(FeedbackReport(kind: .bug, message: String(repeating: "😀", count: 2001), email: "", diagnostics: d, context: nil) == nil)
+    }
     @Test func acceptsLimit() {
         #expect(FeedbackReport(kind: .bug, message: String(repeating: "a", count: 4000), email: "", diagnostics: d, context: nil) != nil)
     }
-    @Test(arguments: ["nope", "a@b", "a b@c.co", "a@b.co\nBcc: x@y.z", String(repeating: "a", count: 250) + "@b.co"])
+    @Test(arguments: ["nope", "a@b", "a b@c.co", "a@b.co\nBcc: x@y.z", "a@b.co>, <x@y.z", "é@b.co", String(repeating: "a", count: 250) + "@b.co"])
     func rejectsEmail(_ e: String) {
         #expect(FeedbackReport(kind: .bug, message: "x", email: e, diagnostics: d, context: nil) == nil)
     }

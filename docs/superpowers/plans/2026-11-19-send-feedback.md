@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-19-send-feedback-design.md`. The spec file is untracked on another branch; Task 1 copies it and this plan into the feature branch.
 
+> **Amended 2026-11-19:** Tasks 4 and 5 were re-scoped by an owner decision. The server is a `POST /feedback` route on the existing worker in `mivu-infra` (branch `feat/feedback-route`), not a Lambda; Task 3 does not add a `CoachDestination` case. The spec's Amendments section is the authority.
+
 ## Global Constraints
 
 - Branch `feat/send-feedback` from `origin/main` (`0fcceeee` or newer), in its own worktree. Never build on `codex/mivu-icon-wordmark`.

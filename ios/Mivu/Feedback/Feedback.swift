@@ -54,8 +54,8 @@ struct FeedbackReport: Encodable, Equatable, Sendable {
     init?(kind: FeedbackKind, message: String, email: String, diagnostics: FeedbackDiagnostics, context: FeedbackContext?) {
         let message = message.trimmingCharacters(in: .whitespacesAndNewlines)
         let email = email.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !message.isEmpty, message.count <= Feedback.messageLimit else { return nil }
-        guard email.isEmpty || (email.count <= 254 && email.wholeMatch(of: /[^@\s]+@[^@\s]+\.[^@\s]+/) != nil) else { return nil }
+        guard !message.isEmpty, message.utf16.count <= Feedback.messageLimit else { return nil }
+        guard email.isEmpty || (email.count <= 254 && email.wholeMatch(of: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/) != nil) else { return nil }
         self.kind = kind; self.message = message; self.email = email.isEmpty ? nil : email
         appVersion = diagnostics.appVersion; build = diagnostics.build; os = diagnostics.os
         device = diagnostics.device; language = diagnostics.language
@@ -72,6 +72,7 @@ struct FeedbackReport: Encodable, Equatable, Sendable {
 enum FeedbackError: Error { case rejected }
 
 enum Feedback {
+    /// UTF-16 units, and the email rule below, match the server's checks (mivu-infra `reports/worker.js`).
     static let messageLimit = 4000
     static let supportAddress = "support@mivuapp.com"
 

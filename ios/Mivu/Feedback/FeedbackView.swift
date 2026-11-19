@@ -21,7 +21,7 @@ import SwiftUI
     /// Nil while the fields are invalid.
     var report: FeedbackReport? { FeedbackReport(kind: kind, message: message, email: email, diagnostics: diagnostics, context: context) }
     var canSend: Bool { report != nil && phase != .sending }
-    var count: Int { message.trimmingCharacters(in: .whitespacesAndNewlines).count }
+    var count: Int { message.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count }
     var overLimit: Bool { count > Feedback.messageLimit }
 
     func submit(openMail: OpenMail) async {
