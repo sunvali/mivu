@@ -34,6 +34,76 @@ import Testing
         #expect(targets.kcal == 1200)
     }
 
+    @Test func activityChangesTheEstimateAndAMissingOneStaysLight() {
+        func kcal(_ activity: ProfileAbout.Activity?) -> Double? {
+            var about = ProfileAbout(heightCm: 180, birthYear: 1996, sex: .unspecified); about.activity = activity
+            return OnboardingAnswers(about: about, weightKg: 80, targetKg: 80).estimate(year: 2026).kcal
+        }
+        #expect(kcal(nil) == 2330, "Profiles saved before activity existed keep their light-activity estimate")
+        #expect(kcal(.some) == 2330)
+        #expect(kcal(.sitting) == 2040)
+        #expect(kcal(.active) == 2630)
+    }
+
+    @Test func theFloorDependsOnSex() {
+        let male = answers(sex: .male, heightCm: 160, weightKg: 55, targetKg: 50, birthYear: 1950, pace: .faster).estimate(year: 2026)
+        let unspecified = answers(sex: .unspecified, heightCm: 150, weightKg: 45, targetKg: 40, birthYear: 1950, pace: .faster).estimate(year: 2026)
+        #expect(male.kcal == 1500)
+        #expect(unspecified.kcal == 1350)
+    }
+
+    @Test func fasterIsCappedAtOnePercentOfBodyWeightAWeek() {
+        var about = ProfileAbout(heightCm: 180, birthYear: 1990, sex: .male, pace: .faster); about.activity = .active
+        let answers = OnboardingAnswers(about: about, weightKg: 70, targetKg: 65)
+        #expect(answers.weeklyKg(.faster) == 0.7)
+        #expect(answers.weeklyKg(.steady) == 0.5)
+        // Maintenance 2557.5 kcal less 0.7 kg a week (770 kcal a day), not 0.75 (825).
+        #expect(answers.estimate(year: 2026).kcal == 1790)
+    }
+
+    @Test func pregnancyKeepsWeightWhateverTheGoal() {
+        var about = ProfileAbout(heightCm: 165, birthYear: 1990, sex: .female, pace: .faster)
+        about.dietTags = [OnboardingAnswers.pregnancyTag]
+        let pregnant = OnboardingAnswers(about: about, weightKg: 70, targetKg: 62)
+        let keeping = answers(sex: .female, heightCm: 165, weightKg: 70, targetKg: 70, birthYear: 1990)
+        #expect(pregnant.holdsWeight)
+        #expect(pregnant.estimate(year: 2026) == keeping.estimate(year: 2026))
+        #expect(pregnant.goalDate(.steady, from: Date(timeIntervalSince1970: 0)) == nil)
+    }
+
+    @Test func goalDateFollowsTheRealEnergyGap() throws {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let steady = answers(sex: .female, heightCm: 165, weightKg: 70, targetKg: 62, birthYear: 1990)
+        // 8 kg at the steady 0.5 kg a week is 16 weeks.
+        let date = try #require(steady.goalDate(.steady, from: start, year: 2026))
+        #expect(abs(date.timeIntervalSince(start) / (7 * 86_400) - 16) < 0.2)
+        // At the floor the real gap shrinks, so the date moves out instead of promising the chosen pace.
+        let floored = answers(sex: .female, heightCm: 150, weightKg: 52, targetKg: 48, birthYear: 1950, pace: .faster)
+        let slow = try #require(floored.goalDate(.faster, from: start, year: 2026))
+        let weeks: Double = slow.timeIntervalSince(start) / (7 * 86_400), promised: Double = 4 / floored.weeklyKg(.faster)
+        #expect(weeks > promised)
+        #expect(answers(sex: .female, heightCm: 165, weightKg: 70, targetKg: 70, birthYear: 1990).goalDate(.steady, from: start) == nil)
+    }
+
+    @Test func aReplyUnderTheFloorIsRejectedAndThePromptStatesIt() {
+        let reply = #"{"kcal":1300,"protein":110,"carbs":120,"fat":42,"explanation":"Lean."}"#
+        #expect(OnboardingTargets.parse(reply, floor: 1200) != nil)
+        #expect(OnboardingTargets.parse(reply, floor: 1500) == nil)
+        var about = ProfileAbout(heightCm: 180, birthYear: 1990, sex: .male); about.activity = .active
+        about.dietTags = [OnboardingAnswers.pregnancyTag]
+        let input = OnboardingTargets.input(OnboardingAnswers(about: about, weightKg: 80, targetKg: 75), estimate: NutritionValues(kcal: 2500), language: "English")
+        guard case .message(.user, let facts, _) = input.last else { Issue.record("no facts"); return }
+        #expect(facts.contains(#""activity":"very active""#))
+        #expect(facts.contains(#""minimum_kcal":1500"#))
+        #expect(facts.contains(#""goal":"keep weight""#))
+    }
+
+    @Test func savedAboutWithoutActivityStillDecodes() throws {
+        let saved = #"{"heightCm":170,"birthYear":1990,"sex":"female","pace":"steady","dietTags":["Vegan"],"healthNotes":""}"#
+        let about = try JSONDecoder().decode(ProfileAbout.self, from: Data(saved.utf8))
+        #expect(about.activity == nil && about.dietTags == ["Vegan"])
+    }
+
     @Test func losingBelowAHealthyWeightIsNotATarget() {
         #expect(answers(sex: .female, heightCm: 165, weightKg: 70, targetKg: 62, birthYear: 1990).targetIsHealthy)
         #expect(!answers(sex: .female, heightCm: 165, weightKg: 55, targetKg: 48, birthYear: 1990).targetIsHealthy)
