@@ -71,7 +71,7 @@ struct CoachView: View {
     private var atTable: Bool { posture == .table && coach.diary.readModel != nil }
     private var conversationInset: CGFloat { atTable ? 0 : composerHeight }
     private var composerStack: some View {
-        VStack(spacing: 8) { queuedSiri; composer }.fixedSize(horizontal: false, vertical: true)
+        VStack(spacing: 8) { queuedSiri; AnyView(composer) }.fixedSize(horizontal: false, vertical: true)
     }
     private var conversation: some View {
         VStack(spacing: 0) {
@@ -482,6 +482,9 @@ struct CoachView: View {
             .accessibilityElement(children: .contain).accessibilityIdentifier("queuedSiri")
         }
     }
+    // The parts are type-erased on purpose. Inlined, the composer was one generic type nested so deeply that the Swift
+    // runtime overflowed the iPhone's 1 MB main-thread stack while building it and Coach crashed on open. The simulator's
+    // stack is larger, so only a real phone shows it.
     private var composer: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let timeline = coach.timeline, timeline.error != nil {
@@ -500,21 +503,21 @@ struct CoachView: View {
                     withAnimation(.snappy) { dismissedMorningDay = day.id.uuidString }
                 }.transition(.opacity)
             }
-            if !coach.attachmentDraft.attachments.isEmpty { draftPhotos }
+            if !coach.attachmentDraft.attachments.isEmpty { AnyView(draftPhotos) }
             if coach.attachmentDraft.isPreparing { ProgressView("Preparing photos").font(.caption) }
             // Pip stands on the left of the field's flat top edge, never on the round button; his bubble and chip
             // may run over the button's column so short lines do not wrap.
             VStack(alignment: .leading, spacing: 0) {
-                companionStrip
+                AnyView(companionStrip)
                 // One tray holds the quick prompts and the field, so the shortcuts read as part of the input.
                 VStack(alignment: .leading, spacing: 8) {
-                    if showsQuickPromptRow && !suggestionsCollapsed { quickPromptRow }
+                    if showsQuickPromptRow && !suggestionsCollapsed { AnyView(quickPromptRow) }
                     HStack(alignment: .bottom, spacing: 8) {
                         // Collapsed, the arrow sits beside the field so the tray shrinks to the field alone.
                         if showsQuickPromptRow && suggestionsCollapsed { suggestionsToggle.transition(.opacity) }
-                        composerInput
+                        AnyView(composerInput)
                         // One round action: the mic while the draft is empty, Send once there is something to send.
-                        Group { if showsSend { send } else { voiceAction } }.transition(.opacity)
+                        Group { if showsSend { AnyView(send) } else { AnyView(voiceAction) } }.transition(.opacity)
                     }
                     .animation(reduceMotion ? nil : .snappy, value: showsSend)
                 }

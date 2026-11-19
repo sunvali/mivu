@@ -1,14 +1,14 @@
 import SwiftUI
 
-/// Pip asks a few questions, ChatGPT turns them into daily targets, and accepting saves the profile, weight and goal.
-/// Runs after a first diary is created and again from Settings, prefilled with what is saved.
+/// Pip asks one question per screen, shows formula targets at once, and ChatGPT can tune them on the last screen.
+/// Accepting saves the profile, weight and goal. Runs after a first diary is created and again from Settings, prefilled.
 struct OnboardingView: View {
     @Bindable var model: DiaryViewModel
     @Bindable var connection: ChatGPTConnection
     let onFinish: () -> Void
 
-    private enum Step: Int, CaseIterable { case hello, about, goal, diet, connect, results }
-    private enum Field: Hashable { case height, feet, inches, weight, birthYear, target, notes }
+    private enum Step: Int, CaseIterable { case hello, height, weight, birthYear, sex, goal, pace, diet, results }
+    private enum Field: Hashable { case height, weight, target, notes }
     static let dietChoices = ["Gluten-free", "Lactose-free", "Vegetarian", "Vegan", "Type 1 diabetes", "Type 2 diabetes", "Crohn's", "IBS", "Nut allergy"]
     private static let thisYear = Calendar.current.component(.year, from: Date())
     private static let kgPerLb = 0.45359237
@@ -16,13 +16,15 @@ struct OnboardingView: View {
     @State private var step = Step.hello
     @State private var askSharingConsent = false
     @State private var forward = true
-    @State private var heightCm: Double?
-    @State private var weightKg: Double?
-    @State private var targetKg: Double?
-    @State private var birthYear: Int?
-    @State private var about = ProfileAbout(heightCm: 0, birthYear: 0)
-    @State private var metricHeight = true
-    @State private var metricWeight = true
+    // Height and weights are typed text in the shown unit; values are stored metric.
+    @State private var heightText: String
+    @State private var weightText: String
+    @State private var targetText: String
+    @State private var birthYear: Int
+    @State private var sexChosen: Bool
+    @State private var about: ProfileAbout
+    @State private var metricHeight: Bool
+    @State private var metricWeight: Bool
     @State private var targets = NutritionValues()
     @State private var reply: OnboardingTargets.Reply?
     @State private var asking = false
@@ -41,29 +43,56 @@ struct OnboardingView: View {
         self.connection = connection
         self.onFinish = onFinish
         let saved = model.readModel
-        if let about = saved?.profile.about {
-            _about = State(initialValue: about)
-            _heightCm = State(initialValue: about.heightCm)
-            _birthYear = State(initialValue: about.birthYear)
-        }
-        if let weight = saved?.weight { _weightKg = State(initialValue: weight.unit == "lb" ? weight.value * Self.kgPerLb : weight.value) }
-        _targetKg = State(initialValue: saved?.activeGoal?.goalWeightKg)
+        let imperial = Locale.current.measurementSystem == .us
+        let savedAbout = saved?.profile.about
+        let weightKg = saved?.weight.map { $0.unit == "lb" ? $0.value * Self.kgPerLb : $0.value } ?? 70
+        let metricWeight = saved?.weight.map { $0.unit != "lb" } ?? !imperial
+        _about = State(initialValue: savedAbout ?? ProfileAbout(heightCm: 170, birthYear: Self.thisYear - 30))
+        _sexChosen = State(initialValue: savedAbout != nil)
+        _birthYear = State(initialValue: savedAbout?.birthYear ?? Self.thisYear - 30)
+        _metricHeight = State(initialValue: !imperial)
+        _metricWeight = State(initialValue: metricWeight)
+        _heightText = State(initialValue: Self.heightText(savedAbout?.heightCm ?? 170, metric: !imperial))
+        _weightText = State(initialValue: Self.weightText(weightKg, metric: metricWeight))
+        _targetText = State(initialValue: saved?.activeGoal?.goalWeightKg.map { Self.weightText($0, metric: metricWeight) } ?? "")
     }
 
+    // MARK: Values
+
+    private static func heightText(_ cm: Double, metric: Bool) -> String {
+        String(Int((metric ? cm : cm / 2.54).rounded()))
+    }
+    private static func weightText(_ kg: Double, metric: Bool) -> String {
+        (((metric ? kg : kg / kgPerLb) * 10).rounded() / 10).formatted(.number.precision(.fractionLength(1)).grouping(.never))
+    }
+    private var heightCm: Double? { ProgressDate.number(heightText).map { metricHeight ? $0 : $0 * 2.54 } }
+    private func kg(_ text: String) -> Double? { ProgressDate.number(text).map { metricWeight ? $0 : $0 * Self.kgPerLb } }
+    private var weightKg: Double? { kg(weightText) }
+    private var targetKg: Double? { kg(targetText) }
+    private var heightValid: Bool { heightCm.map { (50...272).contains($0) } == true }
+    private func weightValid(_ kg: Double?) -> Bool { kg.map { (20...400).contains($0) } == true }
+
     private var answers: OnboardingAnswers? {
-        guard let heightCm, let weightKg, let targetKg, let birthYear else { return nil }
+        guard let heightCm, let weightKg else { return nil }
         var about = about
         about.heightCm = heightCm; about.birthYear = birthYear
-        return OnboardingAnswers(about: about, weightKg: weightKg, targetKg: targetKg)
+        return OnboardingAnswers(about: about, weightKg: weightKg, targetKg: targetKg ?? weightKg)
     }
+
+    private static func feetAndInches(_ inches: Double) -> String {
+        let total = Int(inches.rounded())
+        return "\(total / 12)′ \(total % 12)″"
+    }
+
+    // MARK: Body
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 24) {
+                VStack(spacing: 20) {
                     CompanionView(presentation: CompanionOutput(pose: .resting, playback: reduceMotion ? .staticPose : .animated, reactionID: nil, nextDeadline: nil),
-                                  darkMode: colorScheme == .dark, size: typeSize.isAccessibilitySize || focus != nil ? 72 : 140, runtime: runtime)
-                        .animation(.snappy, value: focus == nil)
+                                  darkMode: colorScheme == .dark, size: pipSize, runtime: runtime)
+                        .animation(.snappy, value: pipSize)
                     VStack(alignment: .leading, spacing: 20) { page }
                         .id(step)
                         .transition(reduceMotion ? .opacity : .asymmetric(insertion: .move(edge: forward ? .trailing : .leading).combined(with: .opacity),
@@ -74,7 +103,7 @@ struct OnboardingView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .background(Color.diaryCanvas.ignoresSafeArea())
-            // Next/Done sit above the keyboard here, not in a keyboard toolbar: that toolbar goes
+            // Done sits above the keyboard here, not in a keyboard toolbar: that toolbar goes
             // missing when setup is presented over Settings, and the number pad has no return key.
             .safeAreaInset(edge: .bottom) { if focus == nil { actions } else { keyboardBar } }
             .toolbar { toolbar }
@@ -89,10 +118,15 @@ struct OnboardingView: View {
             react(.greeting)
         }
         .onDisappear { runtime.stop() }
-        // A plan OpenAI won't share can never connect here, so setup moves on to the estimate.
-        .onChange(of: connection.planAuthorized && connection.models.contains { $0.slug == connection.selectedModel } || connection.planNotEligible) { _, ready in
-            if ready && step == .connect { go(to: .results) }
+        // Connecting from the targets screen asks ChatGPT as soon as the account is ready.
+        .onChange(of: connection.tunesTargets && connection.models.contains { $0.slug == connection.selectedModel }) { _, ready in
+            if ready && step == .results && reply == nil && !asking { Task { await askChatGPT() } }
         }
+    }
+
+    private var pipSize: CGFloat {
+        if typeSize.isAccessibilitySize || focus != nil { return 64 }
+        return step == .hello ? 140 : step == .pace || step == .diet || step == .results ? 72 : 104
     }
 
     // MARK: Chrome
@@ -112,61 +146,61 @@ struct OnboardingView: View {
                 .accessibilityValue("Step \(step.rawValue + 1) of \(Step.allCases.count)")
         }
         ToolbarItem(placement: .topBarTrailing) {
-            if step == .diet { Button("Skip") { advance() } }
-        }
-    }
-
-    /// The keyboard's Next walks the About card in reading order.
-    private var nextField: Field? {
-        switch focus {
-        case .height, .inches: .weight
-        case .feet: .inches
-        case .weight: .birthYear
-        default: nil
+            if step == .sex { Button("Skip") { about.sex = .unspecified; sexChosen = true; advance() }.accessibilityIdentifier("onboardingSkip") }
+            if step == .diet { Button("Skip") { advance() }.accessibilityIdentifier("onboardingSkip") }
         }
     }
 
     private var keyboardBar: some View {
         HStack {
-            if let next = nextField {
-                Button("Next") { focus = next }.frame(minWidth: 44, minHeight: 44).accessibilityIdentifier("keyboardNext")
-            }
             Spacer()
             Button("Done") { focus = nil }.fontWeight(.semibold).frame(minWidth: 44, minHeight: 44).accessibilityIdentifier("keyboardDone")
         }
         .padding(.horizontal, 20).background(.bar)
     }
 
-    private var actions: some View {
-        VStack(spacing: 4) {
-            Button { primary() } label: {
-                Group {
-                    if saving || (asking && step == .results) { ProgressView().tint(Color.diaryActionText) } else { Text(primaryTitle) }
+    @ViewBuilder private var actions: some View {
+        // Sex advances on a card tap, so it has no Continue.
+        if step != .sex {
+            VStack(spacing: 8) {
+                // At accessibility sizes the bar would cover the targets, so Tune moves into the page.
+                if step == .results, showsTune, !typeSize.isAccessibilitySize { tuneButton }
+                Button { primary() } label: {
+                    Group {
+                        if saving { ProgressView().tint(Color.diaryActionText) } else { Text(primaryTitle) }
+                    }
+                    .font(.headline).contentTransition(.identity).frame(maxWidth: .infinity, minHeight: 52)
                 }
-                .font(.headline).contentTransition(.identity).frame(maxWidth: .infinity, minHeight: 52)
+                .buttonStyle(.glassProminent).tint(.diaryAccent).foregroundStyle(Color.diaryActionText)
+                .disabled(!canContinue).accessibilityIdentifier("onboardingNext")
             }
-            .buttonStyle(.glassProminent).tint(.diaryAccent).foregroundStyle(Color.diaryActionText)
-            .disabled(!canContinue).accessibilityIdentifier("onboardingNext")
-            if step == .connect {
-                if connection.appleAvailable {
-                    Button("Use Apple Intelligence instead") { connection.provider = .apple; go(to: .results) }
-                        .font(.subheadline.weight(.medium)).frame(minHeight: 44).accessibilityIdentifier("onboardingChooseApple")
-                    Text("No account, but much less accurate. It only logs meals and changes amounts.")
-                        .font(.caption).foregroundStyle(Color.diarySecondary).multilineTextAlignment(.center)
-                } else {
-                    Button("Use the estimate instead") { go(to: .results) }
-                        .font(.subheadline.weight(.medium)).frame(minHeight: 44).accessibilityIdentifier("onboardingSkipConnect")
-                }
-            }
+            .padding(.horizontal, 20).padding(.vertical, 8)
+            .frame(maxWidth: 560)
         }
-        .padding(.horizontal, 20).padding(.vertical, 8)
-        .frame(maxWidth: 560)
     }
+
+    private var tuneButton: some View {
+        VStack(spacing: 8) {
+            Button { tune() } label: {
+                Group {
+                    if connection.isConnecting { ProgressView() } else { Label("Tune with ChatGPT", systemImage: "sparkles") }
+                }
+                .font(.headline).frame(maxWidth: .infinity, minHeight: 48)
+            }
+            .buttonStyle(.glass).tint(.diaryAccent)
+            .disabled(connection.isConnecting || connection.isDisconnecting || asking || saving)
+            .accessibilityIdentifier("onboardingTune")
+            Text("Shares your answers with ChatGPT after you agree.")
+                .font(.caption).foregroundStyle(Color.diarySecondary).multilineTextAlignment(.center)
+        }
+    }
+
+    /// ChatGPT can still tune these numbers: not yet tuned, and an account that can connect.
+    private var showsTune: Bool { reply == nil && !connection.tunesTargets && !connection.planNotEligible }
 
     private var primaryTitle: String {
         switch step {
         case .hello: String(localized: "Get started")
-        case .connect: connection.activeRegistrationID == nil ? String(localized: "Continue with ChatGPT") : String(localized: "Reauthorize ChatGPT")
         case .results: String(localized: "Save my targets")
         default: String(localized: "Continue")
         }
@@ -183,68 +217,83 @@ struct OnboardingView: View {
                 Divider()
                 promise("leaf", String(localized: "How you eat"), String(localized: "Diets, allergies or conditions Coach should know."))
                 Divider()
-                promise("sparkles", String(localized: "Targets that fit"), String(localized: "ChatGPT tunes calories, protein, carbs and fat."))
+                promise("sparkles", String(localized: "Targets that fit"), String(localized: "Calories, protein, carbs and fat in seconds. ChatGPT can fine-tune them."))
             }
-        case .about:
-            header(String(localized: "About you"), String(localized: "Used only to estimate your energy needs."))
-            card {
-                row(String(localized: "Height"), invalid: heightCm.map { !(50...272).contains($0) } ?? false) {
-                    if metricHeight {
-                        numberField($heightCm, field: .height, id: "onboardingHeight")
-                    } else {
-                        numberField(feet, field: .feet, id: "onboardingFeet", width: 44)
-                        Text("ft").foregroundStyle(Color.diarySecondary)
-                        numberField(inches, field: .inches, id: "onboardingInches", width: 44)
-                    }
-                    unitMenu($metricHeight, metric: "cm", imperial: "in")
-                }
-                Divider()
-                row(String(localized: "Weight"), invalid: weightKg.map { !(20...400).contains($0) } ?? false) {
-                    numberField(shownWeight($weightKg), field: .weight, id: "onboardingWeight")
-                    unitMenu($metricWeight, metric: "kg", imperial: "lb")
-                }
-                Divider()
-                row(String(localized: "Birth year"), invalid: birthYear.map { !(1900...Self.thisYear - 13).contains($0) } ?? false) {
-                    TextField("Add", value: $birthYear, format: .number.grouping(.never))
-                        .keyboardType(.numberPad).multilineTextAlignment(.trailing).font(.title3.monospacedDigit())
-                        .focused($focus, equals: .birthYear).frame(maxWidth: 90)
-                        .accessibilityLabel("Birth year").accessibilityIdentifier("onboardingBirthYear")
-                }
-                Divider()
-                row(String(localized: "Sex", comment: "Onboarding field label"), invalid: false) {
-                    Picker("Sex", selection: $about.sex) {
-                        Text("Female").tag(ProfileAbout.Sex.female)
-                        Text("Male").tag(ProfileAbout.Sex.male)
-                        Text("Prefer not to say").tag(ProfileAbout.Sex.unspecified)
-                    }.labelsHidden().tint(.diaryAccent).fixedSize()
-                }
+        case .height:
+            question(String(localized: "How tall are you?"), nil)
+            if metricHeight {
+                MeasureRuler(title: String(localized: "Height"), text: $heightText, range: 90...250, step: 1, unit: shown("cm"),
+                             placeholder: 170, fieldID: "onboardingHeight", focus: $focus, field: .height)
+            } else {
+                MeasureRuler(title: String(localized: "Height"), text: $heightText, range: 36...96, step: 1, unit: "",
+                             placeholder: 67, fieldID: "onboardingHeight", focus: $focus, field: .height,
+                             formatted: Self.feetAndInches, majorEvery: 12)
             }
-            footnote(String(localized: "Sex is optional. Skipping it uses the midpoint of both formulas."))
+            unitPicker(String(localized: "Height unit", comment: "Accessibility name of the cm or feet and inches switch"), metric: $metricHeight, metricLabel: shown("cm"),
+                       imperialLabel: String(localized: "ft, in", comment: "Feet and inches, a height unit")) { metric in
+                if let cm = ProgressDate.number(heightText).map({ metric ? $0 * 2.54 : $0 }) { heightText = Self.heightText(cm, metric: metric) }
+            }
+            if !heightValid { invalidNote }
+        case .weight:
+            question(String(localized: "What do you weigh?"), nil)
+            weightRuler(String(localized: "Weight"), text: $weightText, id: "onboardingWeight", field: .weight, placeholder: weightKg ?? 70)
+            weightUnitPicker
+            if !weightValid(weightKg) { invalidNote }
+        case .birthYear:
+            question(String(localized: "When were you born?"), String(localized: "Your age changes how much energy you burn."))
+            Picker("Birth year", selection: $birthYear) {
+                ForEach(1900...Self.thisYear - 13, id: \.self) { Text(String($0)).tag($0) }
+            }
+            .pickerStyle(.wheel).frame(maxWidth: .infinity)
+            .accessibilityIdentifier("onboardingBirthYear")
+        case .sex:
+            question(String(localized: "Your sex", comment: "Onboarding question title"), String(localized: "Optional. Helps estimate the energy you burn."))
+            VStack(spacing: 10) {
+                sexCard(.female, String(localized: "Female"))
+                sexCard(.male, String(localized: "Male"))
+                sexCard(.unspecified, String(localized: "Prefer not to say"))
+            }
+            Text("Prefer not to say uses the midpoint of both formulas.").font(.footnote).foregroundStyle(Color.diarySecondary)
+                .multilineTextAlignment(.center).frame(maxWidth: .infinity)
         case .goal:
-            header(String(localized: "Your goal"), String(localized: "Enter your current weight to keep it."))
-            card {
-                row(String(localized: "Target weight"), invalid: targetKg.map { !(20...400).contains($0) } ?? false) {
-                    numberField(shownWeight($targetKg), field: .target, id: "onboardingTarget")
-                    unitMenu($metricWeight, metric: "kg", imperial: "lb")
-                }
-            }
-            if let answers, !answers.targetIsHealthy {
+            question(String(localized: "What's your goal weight?"), nil)
+            weightRuler(String(localized: "Goal weight", comment: "Accessibility name of the goal weight ruler"), text: $targetText, id: "onboardingTarget", field: .target, placeholder: targetKg ?? weightKg ?? 70)
+            if let answers, weightValid(targetKg), !answers.targetIsHealthy {
                 footnote(String(localized: "That target is below a healthy weight for your height, so Mivu can't set it. Choose a higher target, or talk to a doctor or registered dietitian."))
-            } else if let answers, !answers.keepsWeight {
+            } else if let answers, weightValid(targetKg) {
+                Text(goalCaption(answers)).font(.headline).foregroundStyle(Color.diaryAccent).frame(maxWidth: .infinity)
+            } else { invalidNote }
+        case .pace:
+            question(String(localized: "How active, and how fast?"), nil)
+            Text("Day to day, you're…").font(.headline)
+            VStack(spacing: 8) { ForEach(ProfileAbout.Activity.allCases, id: \.self) { activityCard($0) } }
+            if let answers, !answers.keepsWeight {
                 Text(answers.targetKg < answers.weightKg ? String(localized: "How quickly would you like to lose it?") : String(localized: "How quickly would you like to gain it?"))
                     .font(.headline).padding(.top, 4)
                 card {
                     ForEach(ProfileAbout.Pace.allCases, id: \.self) { pace in
                         if pace != .gentle { Divider() }
-                        paceRow(pace)
+                        paceRow(pace, answers)
                     }
                 }
-            } else if answers != nil {
-                Label("We'll aim to keep your weight steady.", systemImage: "equal.circle.fill")
-                    .foregroundStyle(Color.diarySecondary)
+                if ProfileAbout.Pace.allCases.contains(where: { atFloor($0, answers) }) {
+                    footnote(String(localized: "Mivu won't go below \(answers.floor.formatted()) kcal a day."))
+                }
+            } else {
+                Label("We'll aim to keep your weight steady.", systemImage: "equal.circle.fill").foregroundStyle(Color.diarySecondary)
             }
         case .diet:
-            header(String(localized: "How do you eat?"), String(localized: "Pick anything that applies. Coach keeps it in mind for every suggestion."))
+            question(String(localized: "How do you eat?"), nil)
+            Text("Right now", comment: "Onboarding heading above the pregnancy or breastfeeding choice").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diarySecondary)
+            chip(OnboardingAnswers.pregnancyTag)
+            if about.dietTags.contains(OnboardingAnswers.pregnancyTag) {
+                Label {
+                    Text("Mivu will aim to keep your weight steady. Your doctor or midwife is the best guide for how much to eat right now.")
+                } icon: { Image(systemName: "heart.fill").foregroundStyle(Color.diaryAccent) }
+                    .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 16).fill(Color.diarySummarySurface))
+            }
+            Text("Diet and health").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diarySecondary)
             FlowLayout(spacing: 8) {
                 ForEach(Self.dietChoices, id: \.self) { chip($0) }
             }
@@ -253,19 +302,128 @@ struct OnboardingView: View {
                     .lineLimit(2...5).focused($focus, equals: .notes)
                     .onChange(of: about.healthNotes) { _, text in if text.count > 2_000 { about.healthNotes = String(text.prefix(2_000)) } }
             }
-        case .connect:
-            header(String(localized: "Let ChatGPT tune it"), String(localized: "Connect your ChatGPT account to turn your answers into personal targets."))
-            card {
-                promise("lock.shield", String(localized: "Private by default"), String(localized: "Mivu asks before sharing anything with OpenAI. Your diary stays on this iPhone."))
-                Divider()
-                promise("person.crop.circle.badge.checkmark", String(localized: "Your own plan"), String(localized: "Recommended. Works with your ChatGPT plan and uses its allowance. No extra cost."))
-            }
-            if connection.isConnecting { ProgressView("Waiting for ChatGPT…").frame(maxWidth: .infinity) }
-            if let notice = connection.notice { footnote(String(localized: String.LocalizationValue(notice.rawValue))) }
         case .results:
-            header(String(localized: "Your daily targets"), nil)
+            question(String(localized: "Your daily targets"), nil)
             results
         }
+    }
+
+    private func question(_ title: String, _ detail: String?) -> some View {
+        VStack(spacing: 8) {
+            Text(title).font(.title.bold()).accessibilityAddTraits(.isHeader)
+            if let detail { Text(detail).foregroundStyle(Color.diarySecondary) }
+        }
+        .multilineTextAlignment(.center).frame(maxWidth: .infinity)
+    }
+
+    private var invalidNote: some View {
+        Text("Check this value").font(.subheadline).foregroundStyle(Color.diaryError).frame(maxWidth: .infinity)
+    }
+
+    private func weightRuler(_ title: String, text: Binding<String>, id: String, field: Field, placeholder kg: Double) -> some View {
+        MeasureRuler(title: title, text: text, range: metricWeight ? 30...250 : 66...550, step: 0.1, unit: shown(metricWeight ? "kg" : "lb"),
+                     placeholder: ((metricWeight ? kg : kg / Self.kgPerLb) * 10).rounded() / 10, fieldID: id, focus: $focus, field: field)
+    }
+
+    private var weightUnitPicker: some View {
+        unitPicker(String(localized: "Weight unit", comment: "Accessibility name of the kg or lb switch"), metric: $metricWeight, metricLabel: shown("kg"), imperialLabel: shown("lb")) { metric in
+            for text in [$weightText, $targetText] {
+                if let value = ProgressDate.number(text.wrappedValue) { text.wrappedValue = Self.weightText(metric ? value * Self.kgPerLb : value, metric: metric) }
+            }
+        }
+    }
+
+    /// A segmented unit switch that converts the typed value when it changes.
+    private func unitPicker(_ title: String, metric: Binding<Bool>, metricLabel: String, imperialLabel: String, convert: @escaping (Bool) -> Void) -> some View {
+        Picker(title, selection: Binding(get: { metric.wrappedValue }, set: { metric.wrappedValue = $0; convert($0) })) {
+            Text(metricLabel).tag(true)
+            Text(imperialLabel).tag(false)
+        }
+        .pickerStyle(.segmented).frame(maxWidth: 200).frame(maxWidth: .infinity)
+    }
+
+    private func goalCaption(_ answers: OnboardingAnswers) -> String {
+        guard !answers.keepsWeight else { return String(localized: "Keep my weight") }
+        let difference = abs(answers.targetKg - answers.weightKg) / (metricWeight ? 1 : Self.kgPerLb)
+        let amount = "\(difference.formatted(.number.precision(.fractionLength(0...1)))) \(shown(metricWeight ? "kg" : "lb"))"
+        return answers.targetKg < answers.weightKg ? String(localized: "\(amount) to lose", comment: "Goal weight caption: how much weight is left to lose") : String(localized: "\(amount) to gain", comment: "Goal weight caption: how much weight is left to gain")
+    }
+
+    private func sexCard(_ sex: ProfileAbout.Sex, _ name: String) -> some View {
+        let chosen = sexChosen && about.sex == sex
+        return Button {
+            about.sex = sex; sexChosen = true
+            advance()
+        } label: {
+            HStack {
+                Text(name).font(.headline).foregroundStyle(Color.diaryText)
+                Spacer()
+                Image(systemName: chosen ? "checkmark.circle.fill" : "chevron.forward")
+                    .foregroundStyle(chosen ? Color.diaryAccent : Color.diarySecondary).accessibilityHidden(true)
+            }
+            .padding(.horizontal, 18).frame(minHeight: 56).contentShape(Rectangle())
+            .background(RoundedRectangle(cornerRadius: 16).fill(chosen ? Color.diarySummarySurface : Color.diarySurface))
+            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(chosen ? Color.diaryAccent : Color.diaryRule, lineWidth: chosen ? 2 : 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(chosen ? [.isSelected] : [])
+        .accessibilityIdentifier("onboardingSex-\(sex.rawValue)")
+    }
+
+    private func activityCard(_ activity: ProfileAbout.Activity) -> some View {
+        let name: String = switch activity {
+        case .sitting: String(localized: "Mostly sitting", comment: "Onboarding activity level option")
+        case .some: String(localized: "On my feet some", comment: "Onboarding activity level option")
+        case .active: String(localized: "Very active", comment: "Onboarding activity level option")
+        }
+        let chosen = (about.activity ?? .some) == activity
+        return Button { withAnimation(.snappy) { about.activity = activity } } label: {
+            HStack {
+                Text(name).fontWeight(chosen ? .semibold : .regular).foregroundStyle(Color.diaryText)
+                Spacer()
+                Image(systemName: chosen ? "checkmark.circle.fill" : "circle")
+                    .font(.title3).foregroundStyle(chosen ? Color.diaryAccent : Color.diaryRule).accessibilityHidden(true)
+            }
+            .padding(.horizontal, 16).frame(minHeight: 48).contentShape(Rectangle())
+            .background(RoundedRectangle(cornerRadius: 14).fill(chosen ? Color.diarySummarySurface : Color.diarySurface))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(chosen ? Color.diaryAccent : Color.diaryRule, lineWidth: chosen ? 2 : 1))
+        }
+        .buttonStyle(.plain)
+        .sensoryFeedback(.selection, trigger: chosen)
+        .accessibilityAddTraits(chosen ? [.isSelected] : [])
+        .accessibilityIdentifier("onboardingActivity-\(activity.rawValue)")
+    }
+
+    private func atFloor(_ pace: ProfileAbout.Pace, _ answers: OnboardingAnswers) -> Bool {
+        answers.targetKg < answers.weightKg && answers.estimate(pace).kcal == answers.floor
+    }
+
+    private func paceRow(_ pace: ProfileAbout.Pace, _ answers: OnboardingAnswers) -> some View {
+        let name: String = switch pace { case .gentle: String(localized: "Gentle"); case .steady: String(localized: "Steady"); case .faster: String(localized: "Faster") }
+        let kgPerWeek = answers.weeklyKg(pace)
+        let amount = metricWeight ? String(localized: "\(kgPerWeek.formatted(.number.precision(.fractionLength(0...2)))) kg a week")
+            : String(localized: "\((kgPerWeek / Self.kgPerLb).formatted(.number.precision(.fractionLength(1)))) lb a week")
+        let kcal = (answers.estimate(pace).kcal ?? 0).formatted()
+        let detail = answers.goalDate(pace).map {
+            String(localized: "\(kcal) kcal a day · by \($0.formatted(.dateTime.month(.wide).year()))")
+        } ?? String(localized: "\(kcal) kcal a day")
+        let chosen = about.pace == pace
+        return Button { withAnimation(.snappy) { about.pace = pace } } label: {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(name) · \(amount)").fontWeight(chosen ? .semibold : .regular).foregroundStyle(Color.diaryText)
+                    Text(detail).font(.subheadline).foregroundStyle(atFloor(pace, answers) ? Color.diaryWarning : Color.diarySecondary)
+                }
+                Spacer()
+                Image(systemName: chosen ? "checkmark.circle.fill" : "circle")
+                    .font(.title3).foregroundStyle(chosen ? Color.diaryAccent : Color.diaryRule).accessibilityHidden(true)
+            }
+            .frame(minHeight: 60).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .sensoryFeedback(.selection, trigger: chosen)
+        .accessibilityAddTraits(chosen ? [.isSelected] : [])
+        .accessibilityIdentifier("onboardingPace-\(pace.rawValue)")
     }
 
     private var results: some View {
@@ -275,11 +433,17 @@ struct OnboardingView: View {
                     status
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Calories").font(.subheadline.weight(.medium)).foregroundStyle(Color.diarySecondary)
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        // Stacked at accessibility sizes so the unit never wraps letter by letter.
+                        let energy = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading)) : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 6))
+                        energy {
                             TextField("0", value: $targets.kcal, format: .number.precision(.fractionLength(0)))
                                 .keyboardType(.numberPad).font(.system(size: energySize, weight: .semibold, design: .rounded).monospacedDigit())
                                 .fixedSize().accessibilityLabel("Calories per day")
                             Text("kcal a day").font(.title3.weight(.medium)).foregroundStyle(Color.diarySecondary)
+                            if !typeSize.isAccessibilitySize {
+                                Spacer(minLength: 0)
+                                Image(systemName: "pencil").foregroundStyle(Color.diarySecondary).accessibilityHidden(true)
+                            }
                         }
                     }
                     Divider()
@@ -294,6 +458,8 @@ struct OnboardingView: View {
             if let reply {
                 Label { Text(reply.explanation) } icon: { Image(systemName: "sparkles").foregroundStyle(Color.diaryAccent) }
                     .foregroundStyle(Color.diaryText)
+            } else if let answers {
+                Text(basis(answers)).foregroundStyle(Color.diarySecondary)
             }
             if askFailed {
                 VStack(alignment: .leading, spacing: 8) {
@@ -302,8 +468,22 @@ struct OnboardingView: View {
                         .buttonStyle(.glass).tint(.diaryAccent).frame(minHeight: 44)
                 }
             }
+            if let notice = connection.notice { footnote(String(localized: String.LocalizationValue(notice.rawValue))) }
+            if showsTune, typeSize.isAccessibilitySize { tuneButton }
             footnote(String(localized: "These are estimates, not medical advice. Check with a doctor or registered dietitian before big changes to how you eat, especially if you have a health condition. You can change targets any time in Settings › Goals."))
         }
+    }
+
+    /// What the estimate is built from, so the number isn't a black box.
+    private func basis(_ answers: OnboardingAnswers) -> String {
+        let activity: String = switch answers.about.activity ?? .some {
+        case .sitting: String(localized: "mostly sitting")
+        case .some: String(localized: "on your feet some")
+        case .active: String(localized: "very active")
+        }
+        if answers.holdsWeight { return String(localized: "Based on your body and being \(activity), to keep your weight steady. Tap a number to change it.") }
+        guard let date = answers.goalDate(answers.about.pace) else { return String(localized: "Based on your body and being \(activity). Tap a number to change it.") }
+        return String(localized: "Based on your body and being \(activity). At this pace you'd reach your goal around \(date.formatted(.dateTime.month(.wide).year())). Tap a number to change it.")
     }
 
     @ViewBuilder private var macros: some View {
@@ -328,47 +508,39 @@ struct OnboardingView: View {
 
     private var canContinue: Bool {
         switch step {
-        case .about:
-            heightCm.map { (50...272).contains($0) } == true && weightKg.map { (20...400).contains($0) } == true
-                && birthYear.map { (1900...Self.thisYear - 13).contains($0) } == true
-        case .goal: targetKg.map { (20...400).contains($0) } == true && answers?.targetIsHealthy == true
-        case .connect: !connection.isConnecting && !connection.isDisconnecting
+        case .height: heightValid
+        case .weight: weightValid(weightKg)
+        case .goal: weightValid(targetKg) && answers?.targetIsHealthy == true
         case .results: !asking && !saving && [targets.kcal, targets.protein, targets.carbs, targets.fat].allSatisfy { ($0 ?? -1) >= 0 }
         default: true
         }
     }
 
     private func primary() {
-        switch step {
-        case .connect: connection.provider = .chatGPT; if connection.sharingConsented { connectChatGPT() } else { askSharingConsent = true }
-        case .results: Task { await save() }
-        default: advance()
-        }
+        if step == .results { Task { await save() } } else { advance() }
+    }
+
+    private func tune() {
+        connection.provider = .chatGPT
+        // Already signed in (Apple was the chosen provider): switching is enough, and the ready check asks ChatGPT.
+        guard !connection.planAuthorized else { return }
+        if connection.sharingConsented { connectChatGPT() } else { askSharingConsent = true }
     }
 
     private func connectChatGPT() {
         Task { await connection.connect() }
     }
 
-    private func advance() {
-        var next = Step(rawValue: step.rawValue + 1) ?? .results
-        if next == .connect, connection.planAuthorized || connection.planNotEligible { next = .results }
-        go(to: next)
-    }
-
-    private func back() {
-        var previous = Step(rawValue: step.rawValue - 1) ?? .hello
-        if previous == .connect, connection.planAuthorized || connection.planNotEligible { previous = .diet }
-        go(to: previous)
-    }
+    private func advance() { go(to: Step(rawValue: step.rawValue + 1) ?? .results) }
+    private func back() { go(to: Step(rawValue: step.rawValue - 1) ?? .hello) }
 
     private func go(to next: Step) {
         focus = nil
         forward = next.rawValue > step.rawValue
+        if next == .goal, targetText.isEmpty { targetText = weightText }
         withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .snappy) { step = next }
         switch next {
-        case .about: react(.attentive); if heightCm == nil { focus = metricHeight ? .height : .feet }
-        case .goal: react(.saved); if targetKg == nil { focus = .target }
+        case .height: react(.attentive)
         case .results: if forward { showEstimate() }
         default: if forward { react(.saved) }
         }
@@ -387,7 +559,7 @@ struct OnboardingView: View {
         do {
             let respond = try connection.inference()
             let result = try await respond(OnboardingTargets.input(answers, estimate: answers.estimate()), nil)
-            guard let parsed = OnboardingTargets.parse(result.text) else { throw ResponsesClient.Failure.malformedResponse }
+            guard let parsed = OnboardingTargets.parse(result.text, floor: answers.floor) else { throw ResponsesClient.Failure.malformedResponse }
             withAnimation { reply = parsed; targets = parsed.targets }
             react(.saved)
         } catch {
@@ -461,40 +633,6 @@ struct OnboardingView: View {
         .padding(.vertical, 12).accessibilityElement(children: .combine)
     }
 
-    /// A ledger row: label left, value and unit right, with a hint under the label when the value is out of range.
-    private func row(_ label: String, invalid: Bool, @ViewBuilder value: () -> some View) -> some View {
-        HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                if invalid { Text("Check this value").font(.caption).foregroundStyle(Color.diaryError) }
-            }
-            Spacer(minLength: 8)
-            value()
-        }
-        .frame(minHeight: 56)
-    }
-
-    private func numberField(_ value: Binding<Double?>, field: Field, id: String, width: CGFloat = 90) -> some View {
-        TextField("Add", value: value, format: .number.precision(.fractionLength(0...1)))
-            .keyboardType(.decimalPad).multilineTextAlignment(.trailing).font(.title3.monospacedDigit())
-            .focused($focus, equals: field).frame(maxWidth: width).accessibilityIdentifier(id)
-    }
-
-    private func unitMenu(_ metric: Binding<Bool>, metric metricUnit: String, imperial imperialUnit: String) -> some View {
-        Menu {
-            Picker("Unit", selection: metric) {
-                Text(shown(metricUnit)).tag(true)
-                Text(imperialUnit == "in" ? String(localized: "ft, in", comment: "Feet and inches, a height unit") : shown(imperialUnit)).tag(false)
-            }
-        } label: {
-            HStack(spacing: 2) {
-                Text(shown(metric.wrappedValue ? metricUnit : imperialUnit))
-                Image(systemName: "chevron.up.chevron.down").font(.caption2)
-            }
-            .foregroundStyle(Color.diaryAccent).frame(minWidth: 44, minHeight: 44)
-        }
-        .accessibilityLabel("Unit, \(shown(metric.wrappedValue ? metricUnit : imperialUnit))")
-    }
     /// The units are fixed values; this is how they read on screen.
     private func shown(_ unit: String) -> String {
         switch unit {
@@ -502,29 +640,6 @@ struct OnboardingView: View {
         case "in": String(localized: "in", comment: "Inches, a height unit")
         default: WeightEntry.shownUnit(unit)
         }
-    }
-
-    private func paceRow(_ pace: ProfileAbout.Pace) -> some View {
-        let name: String = switch pace { case .gentle: String(localized: "Gentle"); case .steady: String(localized: "Steady"); case .faster: String(localized: "Faster") }
-        let amount = metricWeight ? String(localized: "\(pace.kgPerWeek.formatted()) kg a week")
-            : String(localized: "\((pace.kgPerWeek / Self.kgPerLb).formatted(.number.precision(.fractionLength(1)))) lb a week")
-        let note: String = switch pace { case .gentle: String(localized: "Easiest to keep up"); case .steady: String(localized: "Right for most people"); case .faster: String(localized: "Takes more discipline") }
-        let chosen = about.pace == pace
-        return Button { withAnimation(.snappy) { about.pace = pace } } label: {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(name) · \(amount)").fontWeight(chosen ? .semibold : .regular).foregroundStyle(Color.diaryText)
-                    Text(note).font(.subheadline).foregroundStyle(Color.diarySecondary)
-                }
-                Spacer()
-                Image(systemName: chosen ? "checkmark.circle.fill" : "circle")
-                    .font(.title3).foregroundStyle(chosen ? Color.diaryAccent : Color.diaryRule)
-            }
-            .frame(minHeight: 56).contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .sensoryFeedback(.selection, trigger: chosen)
-        .accessibilityAddTraits(chosen ? [.isSelected] : [])
     }
 
     private func chip(_ tag: String) -> some View {
@@ -562,23 +677,8 @@ struct OnboardingView: View {
     }
 
     /// Weight shown in the chosen unit, stored in kg.
-    private func shownWeight(_ kg: Binding<Double?>) -> Binding<Double?> {
-        Binding(get: { kg.wrappedValue.map { metricWeight ? $0 : (($0 / Self.kgPerLb) * 10).rounded() / 10 } },
-                set: { kg.wrappedValue = $0.map { metricWeight ? $0 : $0 * Self.kgPerLb } })
-    }
-
-    private var feet: Binding<Double?> {
-        Binding(get: { heightCm.map { (($0 / 2.54).rounded() / 12).rounded(.down) } },
-                set: { heightCm = (($0 ?? 0) * 12 + (inches.wrappedValue ?? 0)) * 2.54 })
-    }
-
-    private var inches: Binding<Double?> {
-        Binding(get: { heightCm.map { ($0 / 2.54).rounded().truncatingRemainder(dividingBy: 12) } },
-                set: { heightCm = ((feet.wrappedValue ?? 0) * 12 + ($0 ?? 0)) * 2.54 })
-    }
 }
 
-/// Wraps chips onto as many lines as they need.
 private struct FlowLayout: Layout {
     var spacing: CGFloat
 

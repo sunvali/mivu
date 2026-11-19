@@ -73,6 +73,8 @@ struct SettingsView: View {
                     #endif
                     Link(destination: MivuLinks.privacyPolicy) { settingsRow(String(localized: "Privacy Policy"), symbol: "hand.raised", color: .diaryAccent) }
                         .accessibilityIdentifier("privacyPolicy")
+                    Link(destination: MivuLinks.writeReview) { settingsRow(String(localized: "Rate Mivu"), symbol: "star", color: .diaryCarbs) }
+                        .accessibilityIdentifier("rateMivu")
                     Text("Calorie and nutrition figures are estimates, not medical advice. Check with a doctor or registered dietitian before big changes to how you eat.").font(.subheadline).foregroundStyle(Color.diarySecondary)
                     Text("Keep a backup or export before changing phones.").font(.subheadline).foregroundStyle(Color.diarySecondary)
                 } header: { Text("Support") }

@@ -1,5 +1,41 @@
 # Changelog
 
+## [1.7.0](https://github.com/sunvali/mivu/compare/ios-v1.6.0...ios-v1.7.0) (2026-11-19)
+
+
+### Features
+
+* **languages:** switch on Spanish and Russian ([#168](https://github.com/sunvali/mivu/issues/168)) ([d77de4d](https://github.com/sunvali/mivu/commit/d77de4d4df4723ff8d762fdb63009fd224ec8860))
+
+## [1.6.0](https://github.com/sunvali/mivu/compare/ios-v1.5.0...ios-v1.6.0) (2026-11-19)
+
+
+### Features
+
+* **rating:** ask for an App Store rating after a saved meal ([#165](https://github.com/sunvali/mivu/issues/165)) ([0b3f380](https://github.com/sunvali/mivu/commit/0b3f380fe743722e515bc2af6d995f65116aa1f9))
+
+
+### Bug Fixes
+
+* **ios:** let Release archives strip hidden languages ([#167](https://github.com/sunvali/mivu/issues/167)) ([90ea3c9](https://github.com/sunvali/mivu/commit/90ea3c980810c4c4fe4d85618270442f7b93a56e))
+
+## [1.5.0](https://github.com/sunvali/mivu/compare/ios-v1.4.1...ios-v1.5.0) (2026-11-19)
+
+
+### Features
+
+* **island:** show day progress in the Dynamic Island by default ([#156](https://github.com/sunvali/mivu/issues/156)) ([798a8a3](https://github.com/sunvali/mivu/commit/798a8a315a92c0ae00a96eecbf69d98560726e1c))
+* **languages:** Spanish and Russian, hidden until approved ([#152](https://github.com/sunvali/mivu/issues/152)) ([a024ed1](https://github.com/sunvali/mivu/commit/a024ed1d3f3778390af3ff18d7a2d47f7f1ed53e))
+* **onboarding:** one question per screen with ruler inputs and safer targets ([#163](https://github.com/sunvali/mivu/issues/163)) ([d2e1c23](https://github.com/sunvali/mivu/commit/d2e1c23527489972723773336549ca59d3a4ec87))
+* **today:** add Snap It to the Today bar ([#158](https://github.com/sunvali/mivu/issues/158)) ([54b9153](https://github.com/sunvali/mivu/commit/54b91533f4c4115b0f677939a01d1d9bdef1ecd4))
+
+
+### Bug Fixes
+
+* **coach:** shrink the composer when suggestions are collapsed ([#159](https://github.com/sunvali/mivu/issues/159)) ([e5cefab](https://github.com/sunvali/mivu/commit/e5cefabfea9b9cab7333dc716ee24dbcde58343e))
+* **duo:** keep Coach toolbar after expanding the chat ([#160](https://github.com/sunvali/mivu/issues/160)) ([aaa6051](https://github.com/sunvali/mivu/commit/aaa605169150091043c38846cdff7f88ffc624f0))
+* **layout:** keep the time zone banner and macro row readable at large text ([#162](https://github.com/sunvali/mivu/issues/162)) ([e017711](https://github.com/sunvali/mivu/commit/e017711994b002b4efc3678e699d5b81440cbcbb))
+
 ## [1.4.1](https://github.com/sunvali/mivu/compare/ios-v1.4.0...ios-v1.4.1) (2026-11-19)
 
 

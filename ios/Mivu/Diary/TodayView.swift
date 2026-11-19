@@ -1,6 +1,7 @@
 import SwiftUI
 import TipKit
 import Observation
+import StoreKit
 
 @MainActor @Observable final class DiarySettingsRouteOwner {
     struct Route: Identifiable { let id = UUID(); let destination: CoachDestination? }
@@ -109,6 +110,7 @@ struct DiaryRootView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openURL) private var openURL
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.requestReview) private var requestReview
     @AppStorage("diarySelectedTab") private var restoredTab = "today"
     private let nutritionKeys: NutritionAPIKeyStore
     private var services: MivuServices
@@ -274,11 +276,11 @@ struct DiaryRootView: View {
             companion.characterChanged(now: Date())
             refreshCompanion()
         }
-        .onChange(of: model.companionCaptureEvent) { _, event in receiveCompanionEvent(event) }
+        .onChange(of: model.companionCaptureEvent) { _, event in receiveCompanionEvent(event); considerRating(after: event) }
         .onChange(of: model.companionHabitEvent) { _, event in receiveCompanionEvent(event) }
         .onChange(of: model.companionReviewEvent) { _, event in receiveCompanionEvent(event) }
         .onChange(of: coach.companionSubmission) { _, _ in receiveCompanionSubmission() }
-        .onChange(of: coach.companionCaptureEvent) { _, event in receiveCompanionEvent(event) }
+        .onChange(of: coach.companionCaptureEvent) { _, event in receiveCompanionEvent(event); considerRating(after: event) }
         .onChange(of: coach.companionPhotoEvent) { _, event in receiveCompanionEvent(event) }
         .onChange(of: [coach.isSending, coach.companionNeedsRecovery, coach.companionIsProcessing]) { _, _ in refreshCompanion() }
         .onReceive(NotificationCenter.default.publisher(for: ProcessInfo.thermalStateDidChangeNotification).receive(on: RunLoop.main)) { _ in
@@ -431,18 +433,21 @@ struct DiaryRootView: View {
         }
     }
     private func timeZoneToast(_ notice: TimeZoneSwitch) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "globe").foregroundStyle(Color.diaryAccent).accessibilityHidden(true)
-            Text("Now on \(TimeZoneSync.city(notice.to)) time").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryText)
-            Spacer(minLength: 8)
-            Button { Task { await model.keepPreviousTimeZone() } } label: {
-                Text("Keep \(TimeZoneSync.city(notice.from))").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryAccent)
-                    .frame(minWidth: 44, minHeight: 44).contentShape(.rect)
-            }.accessibilityIdentifier("timeZoneKeep")
+        let globe = Image(systemName: "globe").foregroundStyle(Color.diaryAccent).accessibilityHidden(true)
+        let now = Text("Now on \(TimeZoneSync.city(notice.to)) time").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryText)
+        let keep = Button { Task { await model.keepPreviousTimeZone() } } label: {
+            Text("Keep \(TimeZoneSync.city(notice.from))").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryAccent)
+                .frame(minWidth: 44, minHeight: 44).contentShape(.rect)
+        }.accessibilityIdentifier("timeZoneKeep")
+        // One row while both fit unwrapped; at large text sizes or with long translations, the button goes below.
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) { globe; now.fixedSize(); Spacer(minLength: 8); keep.fixedSize() }
+            VStack(alignment: .leading, spacing: 0) { HStack(alignment: .firstTextBaseline, spacing: 12) { globe; now }; keep }
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.leading, 16).padding(.trailing, 12).padding(.vertical, 6)
-        .background(Color.diarySurface, in: .capsule)
-        .overlay(Capsule().strokeBorder(Color.diaryRule))
+        .background(Color.diarySurface, in: .rect(cornerRadius: 28, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(Color.diaryRule))
         .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
         .padding(.horizontal, 16).padding(.bottom, 8)
         .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
@@ -570,6 +575,22 @@ struct DiaryRootView: View {
         receiveCompanionSubmission()
         companion.receive(event, now: Date())
         refreshCompanion()
+    }
+    /// A save is the happy moment; wait past Pip's reaction and skip (without recording) when anything else is going on.
+    private func considerRating(after event: CompanionEvent?) {
+        guard let event, event.kind == .saved, !model.sampleMode, !DiaryLaunch.isUITest else { return }
+        Task {
+            try? await Task.sleep(for: .seconds(1))
+            guard phase == .active, !model.isChangingProfile, event.profileID == model.readModel?.profile.id, !coach.isSending,
+                  selectedCompanionSurface != nil,
+                  let days = try? await model.store.loggedDayCount(expectedProfileID: event.profileID) else { return }
+            let rating = RatingPrompt(defaults: DiaryLaunch.defaults)
+            // Checked last: any sheet or cover, including ones Today's subviews own, may have opened during the wait.
+            let presenting = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first?.rootViewController?.presentedViewController
+            guard presenting == nil, rating.shouldAsk(loggedDays: days) else { return }
+            rating.recordAsk(loggedDays: days)
+            requestReview()
+        }
     }
     private func receiveCompanionSubmission() {
         guard phase == .active, !model.isChangingProfile, let submission = coach.companionSubmission,
@@ -928,21 +949,12 @@ struct TodayView: View {
                     if day == nil { Text("No meals recorded").font(.caption).foregroundStyle(Color.diarySecondary) }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
-            HStack(spacing: 8) {
-                heroMetric("Protein", value: totals.protein, color: .diaryProtein)
-                Divider().frame(height: 32)
-                heroMetric("Carbs", value: totals.carbs, color: .diaryCarbs)
-                Divider().frame(height: 32)
-                heroMetric("Fat", value: totals.fat, color: .diaryFat)
-            }
+            DiaryMacroRow(protein: totals.protein, carbs: totals.carbs, fat: totals.fat)
             if totals.unknownItemCount > 0 {
                 Text("Some nutrients are unknown. Recorded totals may be incomplete.")
                     .font(.caption).foregroundStyle(Color.diarySecondary)
             }
         }
-    }
-    private func heroMetric(_ title: LocalizedStringKey, value: Double?, color: Color) -> some View {
-        DiaryMetric(title: title, value: value.map { String(localized: "\($0.formatted(.number.precision(.fractionLength(0)))) g") }, color: color)
     }
 
     @ViewBuilder private func todayGoal(snapshot: DiaryReadModel, day: TrackingDay) -> some View {

@@ -16,12 +16,18 @@ struct ProfileAbout: Codable, Equatable, Sendable {
         case gentle, steady, faster
         var kgPerWeek: Double { switch self { case .gentle: 0.25; case .steady: 0.5; case .faster: 0.75 } }
     }
+    enum Activity: String, Codable, CaseIterable, Sendable {
+        case sitting, some, active
+        var factor: Double { switch self { case .sitting: 1.2; case .some: 1.375; case .active: 1.55 } }
+    }
     var heightCm: Double
     var birthYear: Int
     var sex = Sex.unspecified
     var pace = Pace.steady
     var dietTags: [String] = []
     var healthNotes = ""
+    /// Optional so profiles saved before it existed still decode; nil reads as `.some`.
+    var activity: Activity? = nil
 }
 
 enum DayCompleteness: String, Codable, CaseIterable, Sendable { case unknown, complete, partial, untracked }
