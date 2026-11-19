@@ -6,6 +6,8 @@
 	<array>
 		<string>whatsapp</string>
 	</array>
+	<key>MivuFeedbackEndpoint</key>
+	<string>$(MIVU_FEEDBACK_ENDPOINT)</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIApplicationShortcutItems</key>
