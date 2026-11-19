@@ -1,4 +1,4 @@
-import Foundation
+import UIKit
 
 private let bundleVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
 private func isOlder(_ version: String, than other: String) -> Bool { version.compare(other, options: .numeric) == .orderedAscending }
@@ -14,6 +14,11 @@ private func isOlder(_ version: String, than other: String) -> Bool { version.co
         let arguments = ProcessInfo.processInfo.arguments
         if DiaryLaunch.isUITest && arguments.contains("--update-available-fixture") { update.available = "99.0" }
         if DiaryLaunch.isUITest && arguments.contains("--update-required-fixture") { update.minimum = "99.0" }
+        if DiaryLaunch.isUITest && arguments.contains("--update-required-on-return") {
+            NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated { update.minimum = "99.0" }
+            }
+        }
         #endif
         return update
     }()
@@ -37,7 +42,8 @@ private func isOlder(_ version: String, than other: String) -> Bool { version.co
 
     /// Failures change nothing: the last minimum stays, so a broken website never blocks and an offline phone stays blocked.
     func check(now: Date = Date()) async {
-        if let lastCheck, now.timeIntervalSince(lastCheck) < 3_600 { return }
+        // A blocked person checks every time, so a lowered minimum frees them on their next return.
+        if !isBlocked, let lastCheck, now.timeIntervalSince(lastCheck) < 3_600 { return }
         lastCheck = now
         async let store = fetch(Lookup.self, from: Self.lookupURL)
         async let config = fetch(Config.self, from: Self.configURL)

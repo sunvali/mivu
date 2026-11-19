@@ -173,7 +173,9 @@ struct DiaryRootView: View {
         .overlay { if appUpdate.isBlocked { UpdateRequiredView(model: model) } }
         .onChange(of: appUpdate.isBlocked, initial: true) { _, blocked in
             guard blocked else { return }
-            routes.route = nil; coachHistory = nil; noteMealID = nil; quickLogOwner = nil; quickLogEarly = false
+            routes.route = nil; coachHistory = nil; noteMealID = nil; notifiedMealID = nil; quickLogOwner = nil; quickLogEarly = false
+            // Sheets and covers owned deeper in the tree sit above the overlay, so close whatever is still presented.
+            (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.keyWindow?.rootViewController?.dismiss(animated: false)
         }
         .alert("Could not complete action", isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })) {
             Button("OK", role: .cancel) { model.errorMessage = nil }
@@ -482,22 +484,22 @@ struct DiaryRootView: View {
         withTransaction(instant) { quickLogOwner = owner; quickLogEarly = false }
     }
     private var showsNotEligibleNotice: Bool {
-        hasLoaded && !showOnboarding && routes.route == nil && coachHistory == nil && quickLogOwner == nil
+        hasLoaded && !showOnboarding && !appUpdate.isBlocked && routes.route == nil && coachHistory == nil && quickLogOwner == nil
             && noteMealID == nil && notifiedMealID == nil && connection.showsNotEligibleNotice
     }
     private var showsPlanWelcome: Bool {
-        hasLoaded && !showOnboarding && routes.route == nil && coachHistory == nil && quickLogOwner == nil
+        hasLoaded && !showOnboarding && !appUpdate.isBlocked && routes.route == nil && coachHistory == nil && quickLogOwner == nil
             && noteMealID == nil && notifiedMealID == nil && connection.showsPlanWelcome
     }
     private func openCoachRequest() {
-        guard quickLog.openCoach, hasLoaded else { return }
+        guard quickLog.openCoach, hasLoaded, !appUpdate.isBlocked else { return }
         quickLog.openCoach = false
         guard model.selection != nil, model.readModel != nil, !showOnboarding, !model.isChangingProfile else { return }
         routes.route = nil; coachHistory = nil; noteMealID = nil
         selectedTab = "coach"
     }
     private func openNotifiedMeal() {
-        guard let id = mealNotifications.openedMealID, hasLoaded else { return }
+        guard let id = mealNotifications.openedMealID, hasLoaded, !appUpdate.isBlocked else { return }
         mealNotifications.openedMealID = nil
         guard model.readModel != nil, !showOnboarding, !model.isChangingProfile, quickLogOwner == nil else { return }
         routes.route = nil; coachHistory = nil; noteMealID = nil

@@ -38,6 +38,17 @@ final class UpdatePromptUITests: XCTestCase {
         XCTAssertFalse(app.buttons["profileSettings"].isHittable)
     }
 
+    func testBlockOnReturnClosesOpenSheets() {
+        let app = launch("--update-required-on-return")
+        XCTAssertTrue(app.buttons["profileSettings"].waitForExistence(timeout: 15)); app.buttons["profileSettings"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        XCTAssertTrue(app.buttons["updateRequiredStore"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.navigationBars["Settings"].exists)
+        XCTAssertTrue(app.buttons["updateRequiredStore"].isHittable)
+    }
+
     func testWhatsNewShowsUntilGotIt() {
         let app = launch("--whats-new-fixture")
         let card = app.descendants(matching: .any)["whatsNewCard"].firstMatch

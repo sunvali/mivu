@@ -129,6 +129,15 @@ private final class UpdateStub: URLProtocol, @unchecked Sendable {
         #expect(app.isBlocked)
     }
 
+    @Test func blockedChecksIgnoreTheHourlyLimit() async {
+        let app = update(session: UpdateStub.session(config: (200, #"{"ios":"9.0.0"}"#)))
+        await app.check(now: now)
+        #expect(app.isBlocked)
+        UpdateStub.replies["mivuapp.com"] = (200, #"{"ios":"1.0.0"}"#)
+        await app.check(now: now.addingTimeInterval(60))
+        #expect(!app.isBlocked)
+    }
+
     @Test func firstRunRecordsWithoutShowing() {
         let saved = defaults()
         let fresh = WhatsNew(defaults: saved, version: "1.9.0", notes: ["1.9.0": ["Synthetic highlight"]])
