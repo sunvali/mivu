@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.0](https://github.com/sunvali/mivu/compare/ios-v1.5.0...ios-v1.6.0) (2026-11-19)
+
+
+### Features
+
+* **rating:** ask for an App Store rating after a saved meal ([#165](https://github.com/sunvali/mivu/issues/165)) ([0b3f380](https://github.com/sunvali/mivu/commit/0b3f380fe743722e515bc2af6d995f65116aa1f9))
+
+
+### Bug Fixes
+
+* **ios:** let Release archives strip hidden languages ([#167](https://github.com/sunvali/mivu/issues/167)) ([90ea3c9](https://github.com/sunvali/mivu/commit/90ea3c980810c4c4fe4d85618270442f7b93a56e))
+
 ## [1.5.0](https://github.com/sunvali/mivu/compare/ios-v1.4.1...ios-v1.5.0) (2026-11-19)
 
 
