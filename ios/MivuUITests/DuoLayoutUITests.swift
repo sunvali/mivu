@@ -185,6 +185,15 @@ import XCTest
         XCTAssertTrue(app.navigationBars["Meal"].waitForExistence(timeout: 5), "A card opens its meal over the expanded chat")
     }
 
+    func testExpandedChatStaysUncoveredWhenCoachSaves() throws {
+        let (app, input) = try launchCoach()
+        app.buttons["coachExpand"].firstMatch.tap()
+        send("Yesterday I had dessert", app, input)
+        XCTAssertTrue(app.buttons["coachMealLink"].waitForExistence(timeout: 20))
+        XCTAssertFalse(app.navigationBars["Diary"].waitForExistence(timeout: 2), "The slid-away pane does not push the changed day over the chat")
+        XCTAssertTrue(input.exists)
+    }
+
     func testDeletingPaneMealReturnsToToday() throws {
         let (app, input) = try launchCoach()
         send("Two eggs, three bread slices and salad", app, input)
