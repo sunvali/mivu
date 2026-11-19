@@ -110,3 +110,65 @@ private final class FeedbackStub: URLProtocol, @unchecked Sendable {
         }
     }
 }
+
+@MainActor @Suite struct FeedbackFormTests {
+    let d = FeedbackDiagnostics(appVersion: "1.7.0", build: "42", os: "26.1", device: "iPhone17,1", language: "en")
+    let endpoint = URL(string: "https://feedback.invalid/report")!
+    @MainActor final class Calls { var sends = 0; var mail: [URL] = []; var fail = false; var mailOpens = true }
+
+    func form(_ calls: Calls, endpoint: URL?) -> FeedbackForm {
+        let form = FeedbackForm(kind: .bug, context: nil, endpoint: endpoint, diagnostics: d) { _, _ in
+            calls.sends += 1
+            try await Task.sleep(for: .milliseconds(20))
+            if calls.fail { throw FeedbackError.rejected }
+        }
+        form.message = "Synthetic problem"; form.email = "a@b.co"
+        return form
+    }
+    func open(_ calls: Calls) -> FeedbackForm.OpenMail { { calls.mail.append($0); return calls.mailOpens } }
+
+    @Test func directSendReachesSentOnlyAfterSuccess() async {
+        let calls = Calls(), form = form(calls, endpoint: endpoint)
+        await form.submit(openMail: open(calls))
+        #expect(form.phase == .sent); #expect(calls.sends == 1); #expect(calls.mail.isEmpty)
+    }
+    @Test func failureKeepsTextAndOffersRetry() async {
+        let calls = Calls(), form = form(calls, endpoint: endpoint); calls.fail = true
+        await form.submit(openMail: open(calls))
+        #expect(form.phase == .failed); #expect(form.message == "Synthetic problem"); #expect(form.email == "a@b.co"); #expect(form.canSend)
+    }
+    @Test func retryAfterFailureCanSucceed() async {
+        let calls = Calls(), form = form(calls, endpoint: endpoint); calls.fail = true
+        await form.submit(openMail: open(calls)); calls.fail = false
+        await form.submit(openMail: open(calls))
+        #expect(form.phase == .sent); #expect(calls.sends == 2)
+    }
+    @Test func emailFallbackOpensTheSameReport() async throws {
+        let calls = Calls(), form = form(calls, endpoint: endpoint); calls.fail = true
+        await form.submit(openMail: open(calls))
+        await form.sendByEmail(openMail: open(calls))
+        #expect(calls.mail == [Feedback.mailto(try #require(form.report))])
+    }
+    @Test func noEndpointUsesMailAndNeverClaimsSent() async {
+        let calls = Calls(), form = form(calls, endpoint: nil)
+        await form.submit(openMail: open(calls))
+        #expect(calls.mail.count == 1); #expect(calls.sends == 0); #expect(form.phase == .editing)
+    }
+    @Test func mailUnavailableShowsAddress() async {
+        let calls = Calls(), form = form(calls, endpoint: nil); calls.mailOpens = false
+        await form.submit(openMail: open(calls))
+        #expect(form.phase == .mailUnavailable)
+    }
+    @Test func secondSubmitWhileSendingIsIgnored() async {
+        let calls = Calls(), form = form(calls, endpoint: endpoint)
+        async let first: Void = form.submit(openMail: open(calls))
+        async let second: Void = form.submit(openMail: open(calls))
+        _ = await (first, second)
+        #expect(calls.sends == 1); #expect(form.phase == .sent)
+    }
+    @Test func overLimitDisablesSend() {
+        let calls = Calls(), form = form(calls, endpoint: endpoint)
+        form.message = String(repeating: "a", count: 4001)
+        #expect(!form.canSend); #expect(form.overLimit); #expect(form.message.count == 4001)
+    }
+}

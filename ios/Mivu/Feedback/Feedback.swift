@@ -37,7 +37,7 @@ struct FeedbackDiagnostics: Equatable, Sendable {
             language: Bundle.main.preferredLocalizations.first ?? "en")
     }
     var lines: [String] {
-        [String(localized: "Mivu \(appVersion) (\(build))"), String(localized: "iOS \(os)"),
+        ["Mivu \(appVersion) (\(build))", "iOS \(os)",
          String(localized: "Device: \(device)"), String(localized: "Language: \(language)")]
     }
 }

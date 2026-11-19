@@ -29,7 +29,7 @@ struct SettingsView: View {
     private var hasUnsavedChanges: Bool { fields.isDirty || !nutritionDraft.text.isEmpty }
 
     private enum SettingsSection: Hashable {
-        case profiles, preferences, backup, connection, nutritionSource
+        case profiles, preferences, backup, connection, nutritionSource, feedback
     }
     var body: some View {
         List {
@@ -71,6 +71,8 @@ struct SettingsView: View {
                     #if DEBUG
                     Button { showDiagnostic = true } label: { settingsRow(String(localized: "Diagnostics"), symbol: "stethoscope", color: .diarySuccess) }
                     #endif
+                    NavigationLink(value: SettingsSection.feedback) { settingsRow(String(localized: "Send feedback"), symbol: "bubble.left.and.exclamationmark.bubble.right", color: .diaryProtein) }
+                        .accessibilityIdentifier("sendFeedback")
                     Link(destination: MivuLinks.privacyPolicy) { settingsRow(String(localized: "Privacy Policy"), symbol: "hand.raised", color: .diaryAccent) }
                         .accessibilityIdentifier("privacyPolicy")
                     Link(destination: MivuLinks.writeReview) { settingsRow(String(localized: "Rate Mivu"), symbol: "star", color: .diaryCarbs) }
@@ -181,8 +183,13 @@ struct SettingsView: View {
     }
 
     @ViewBuilder private func settingsDetail(_ section: SettingsSection) -> some View {
+        if section == .feedback { FeedbackView() } else { settingsForm(section) }
+    }
+
+    @ViewBuilder private func settingsForm(_ section: SettingsSection) -> some View {
         Form {
             switch section {
+            case .feedback: EmptyView() // its own screen, see settingsDetail
             case .profiles:
             Section("Private local profile") {
                 if let profile = model.readModel?.profile { Text(profile.name).font(.headline) }
@@ -395,6 +402,7 @@ struct SettingsView: View {
         case .backup: String(localized: "Backup & export")
         case .connection: String(localized: "Coach AI")
         case .nutritionSource: String(localized: "Nutrition source")
+        case .feedback: String(localized: "Send feedback")
         }
     }
 
