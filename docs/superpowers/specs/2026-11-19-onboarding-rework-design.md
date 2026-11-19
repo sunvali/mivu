@@ -47,8 +47,9 @@ Hello → Height → Weight → Birth year → Sex → Goal weight → Activity 
    - The button is hidden when the plan can never connect.
    - The separate Connect step and its Apple Intelligence choice are removed. Apple Intelligence
      can't tune targets.
-9. **Today.** The existing empty-meals card already points at Snap It and Chat with Pip. It gets
-   a Pip-voiced line: "You're all set! Log your first meal — snap it or just type it."
+9. **Today.** Unchanged. Its empty-meals card ("Your first meal starts here") already points at
+   Snap It and Chat with Pip on every empty day. A one-time "You're all set!" line would read
+   wrong on later days, so no second nudge is added.
 
 No permission prompts and no rating request anywhere in setup. Redo setup from Settings runs the
 same flow, prefilled.
