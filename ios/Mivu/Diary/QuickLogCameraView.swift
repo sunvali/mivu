@@ -21,7 +21,7 @@ struct QuickLogCameraView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             CoachCameraPreview(camera: camera, presentationID: presentationID).ignoresSafeArea()
-            if scene != .active || !state.isRunning { statusCover }
+            if covered { statusCover }
             controls
         }
         .foregroundStyle(.white).tint(.white)
@@ -50,6 +50,7 @@ struct QuickLogCameraView: View {
             }.padding(32)
         }
     }
+    private var covered: Bool { scene != .active || !state.isRunning }
     private var status: String {
         switch state.phase {
         case .denied: String(localized: "Allow camera access in Settings to log meals with a photo.")
@@ -70,7 +71,8 @@ struct QuickLogCameraView: View {
             CoachCameraLensBar(state: state, camera: camera).padding(.bottom, 12)
             if saving { ProgressView("Logging meal").tint(.white) }
             else if ownership == nil { ProgressView("Opening your diary").tint(.white) }
-            else { Text("Snap your meal to log it").font(.subheadline).shadow(radius: 4).accessibilityHidden(true) }
+            // The status cover says why the camera is off, so the hint stays away rather than printing over it.
+            else if !covered { Text("Snap your meal to log it").font(.subheadline).shadow(radius: 4).accessibilityHidden(true) }
             shutterButton.padding(.top, 12)
             if (DiaryLaunch.isSampleMode || DiaryLaunch.isUITest), state.phase == .unavailable, ownership != nil {
                 Button("Add synthetic test photo") { if let data = PhotoImport.syntheticApple() { save(MealDraft(photos: [data])) } }
