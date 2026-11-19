@@ -67,6 +67,12 @@ secos» (walnuts only), «cupo» reworded (2 rows), three plainer rewrites for a
 older reader, one hard-to-read sentence, and the listing's «tostada» (a fried
 tortilla in Mexico) → «pan tostado».
 
+Five Russian reader agents (Moscow, a St. Petersburg senior, a Haifa nurse, a
+Brooklyn émigré, an Almaty dietitian) found 0 errors; all five would use the app
+in this Russian. Applied: plainer ChatGPT connection, backup and error wording for
+an older reader (9 rows), two calques, and «в коуче» → «в Coach» where the
+feature is meant (2 rows).
+
 ## Code changes found by the review
 
 - The calorie band "Off" had the same key as the switched-off status, so it read

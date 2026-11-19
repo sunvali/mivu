@@ -28,7 +28,7 @@ owner reads every string on one page before the language ships.
 - **Pip** is «Пип», declined as an animate masculine noun: Пип, Пипа, Пипу,
   с Пипом, о Пипе ("Спроси Пипа"). Pip is a fox. The sentence about Pip may be
   masculine; Pip's own lines still avoid gendered past tense.
-- **Coach** stays "Coach", in Latin letters, as the name of the tab and feature. In a running sentence it is «коуч», declined: «спроси коуча», «с коучем» (owner's choice).
+- **Coach** stays "Coach", in Latin letters, as the name of the tab and feature. In a running sentence it is «коуч», declined: «спроси коуча», «с коучем» (owner's choice). The feature as a place stays «в Coach» («анализ в Coach», «ответить в Coach»), never «в коуче».
 - **Snap It** stays in English, undeclined, after a noun where grammar needs
   one: "в Snap It", "режим Snap It".
 
