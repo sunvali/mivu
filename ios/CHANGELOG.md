@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/sunvali/mivu/compare/ios-v1.4.0...ios-v1.4.1) (2026-11-19)
+
+
+### Bug Fixes
+
+* **health:** add the Health update purpose string the App Store requires ([#154](https://github.com/sunvali/mivu/issues/154)) ([5306bce](https://github.com/sunvali/mivu/commit/5306bce9347cb50b8beb7e5fbe5dff418d56dd7c))
+
 ## [1.4.0](https://github.com/sunvali/mivu/compare/ios-v1.3.0...ios-v1.4.0) (2026-11-18)
 
 
