@@ -24,6 +24,9 @@ enum DayProgressSync: Equatable {
 
     static let enabledKey = "liveActivityEnabled", hideWhenLockedKey = "liveActivityHideWhenLocked"
 
+    /// On until the person turns it off in Settings.
+    static func isEnabled(_ defaults: UserDefaults) -> Bool { defaults.object(forKey: enabledKey) as? Bool ?? true }
+
     /// iOS keeps an ended activity listed until its Lock Screen card goes; it can no longer be updated.
     static func isLive(_ state: ActivityState) -> Bool { state == .active || state == .stale }
 
@@ -43,7 +46,7 @@ private let liveActivityLog = Logger(subsystem: "com.yakov103.mivu", category: "
     // UI tests run synthetic diaries; only a test that asks for it may show a real activity.
     guard !DiaryLaunch.isUITest || ProcessInfo.processInfo.arguments.contains("--live-activity") else { return }
     let defaults = UserDefaults.standard
-    let enabled = defaults.bool(forKey: DayProgressSync.enabledKey)
+    let enabled = DayProgressSync.isEnabled(defaults)
     let hide = defaults.object(forKey: DayProgressSync.hideWhenLockedKey) as? Bool ?? true
     var content = readModel.flatMap { model in
         model.activeDay.map { day in
