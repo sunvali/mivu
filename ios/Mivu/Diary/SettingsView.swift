@@ -71,6 +71,10 @@ struct SettingsView: View {
                     #if DEBUG
                     Button { showDiagnostic = true } label: { settingsRow(String(localized: "Diagnostics"), symbol: "stethoscope", color: .diarySuccess) }
                     #endif
+                    if let version = AppUpdate.shared.available {
+                        Link(destination: MivuLinks.appStore) { settingsRow(String(localized: "Update available"), symbol: "arrow.down.circle", color: .diaryAccent, value: version) }
+                            .accessibilityIdentifier("updateAvailable")
+                    }
                     NavigationLink(value: SettingsSection.feedback) { settingsRow(String(localized: "Send feedback"), symbol: "bubble.left.and.exclamationmark.bubble.right", color: .diaryProtein) }
                         .accessibilityIdentifier("sendFeedback")
                     Link(destination: MivuLinks.privacyPolicy) { settingsRow(String(localized: "Privacy Policy"), symbol: "hand.raised", color: .diaryAccent) }
