@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.8.0](https://github.com/sunvali/mivu/compare/ios-v1.7.0...ios-v1.8.0) (2026-11-19)
+
+
+### Features
+
+* **today:** teach Snap It on the Lock Screen, Control Center and Action button ([#164](https://github.com/sunvali/mivu/issues/164)) ([2729635](https://github.com/sunvali/mivu/commit/27296350ec0f0e9329e825a0f6e05864882fe503))
+
+
+### Bug Fixes
+
+* **coach:** stop the composer overflowing the main-thread stack on iPhone ([#170](https://github.com/sunvali/mivu/issues/170)) ([0fcceee](https://github.com/sunvali/mivu/commit/0fcceeee32c34a368a4b0a93fc355d855649972a))
+
 ## [1.7.0](https://github.com/sunvali/mivu/compare/ios-v1.6.0...ios-v1.7.0) (2026-11-19)
 
 
