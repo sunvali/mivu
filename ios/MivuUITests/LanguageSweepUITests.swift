@@ -1,7 +1,7 @@
 import XCTest
 
 /// Walks every main screen in one of three modes and attaches a capture of each.
-/// Mode and text size come from the runner's environment: `TEST_RUNNER_SWEEP_MODE=english|rtl|double|hebrew`
+/// Mode and text size come from the runner's environment: `TEST_RUNNER_SWEEP_MODE=english|rtl|double|hebrew|spanish|russian`
 /// and `TEST_RUNNER_SWEEP_TEXT=default|largest`. See docs/verification/languages/README.md.
 @MainActor final class LanguageSweepUITests: XCTestCase {
     /// Screens whose text is not all in the string catalogs yet. Empty when the app is language-ready.
@@ -26,7 +26,7 @@ import XCTest
         app.launchArguments = ["--diary-ui-test", UUID().uuidString] + fixture + extra
         if mode == "rtl" { app.launchArguments += ["-AppleTextDirection", "YES", "-NSForceRightToLeftWritingDirection", "YES"] }
         if mode == "double" { app.launchArguments += ["-NSDoubleLocalizedStrings", "YES"] }
-        if mode == "hebrew" { app.launchArguments += ["-AppleLanguages", "(he)", "-AppleLocale", "he_IL"] }
+        if let language { app.launchArguments += ["-AppleLanguages", "(\(language.code))", "-AppleLocale", language.locale] }
         if text == "largest" { app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] }
         app.launch()
         // The Duo's open and half-open poses are sideways by default; "portrait" turns them upright (table pose when half-open).
@@ -34,11 +34,21 @@ import XCTest
         return app
     }
 
-    /// What a Hebrew phone shows for the English names the sweep looks for.
-    static let hebrew = ["Today": "היום", "Diary": "יומן", "Progress": "התקדמות", "Coach": "פיפ", "Chat history": "היסטוריית שיחות",
-                         "Cancel": "ביטול", "Close": "סגירה", "Done": "סיום", "More": "עוד",
-                         "Add to this day": "הוספה ליום הזה", "Day actions, ": "פעולות לתאריך: "]
-    private func shown(_ english: String) -> String { mode == "hebrew" ? Self.hebrew[english] ?? english : english }
+    typealias Language = (code: String, locale: String, names: [String: String])
+    /// Each language mode's phone, and what it shows for the English names the sweep looks for.
+    static let languages: [String: Language] = [
+        "hebrew": ("he", "he_IL", ["Today": "היום", "Diary": "יומן", "Progress": "התקדמות", "Coach": "פיפ", "Chat history": "היסטוריית שיחות",
+                                   "Cancel": "ביטול", "Close": "סגירה", "Done": "סיום", "More": "עוד",
+                                   "Add to this day": "הוספה ליום הזה", "Day actions, ": "פעולות לתאריך: "]),
+        "spanish": ("es", "es_MX", ["Today": "Hoy", "Diary": "Diario", "Progress": "Progreso", "Coach": "Coach", "Chat history": "Historial de chat",
+                                    "Cancel": "Cancelar", "Close": "Cerrar", "Done": "Listo", "More": "Más",
+                                    "Add to this day": "Agregar a este día", "Day actions, ": "Acciones del día, "]),
+        "russian": ("ru", "ru_RU", ["Today": "Сегодня", "Diary": "Дневник", "Progress": "Прогресс", "Coach": "Coach", "Chat history": "История чата",
+                                    "Cancel": "Отменить", "Close": "Закрыть", "Done": "Готово", "More": "Ещё",
+                                    "Add to this day": "Добавить к этому дню", "Day actions, ": "Действия для дня, "]),
+    ]
+    private var language: Language? { Self.languages[mode] }
+    private func shown(_ english: String) -> String { language?.names[english] ?? english }
 
     private func tab(_ name: String, in app: XCUIApplication) -> XCUIElement {
         // Labels are doubled in double mode, and the Duo's sideways bar is not a tab bar.
@@ -179,32 +189,39 @@ import XCTest
         XCTAssertTrue(app.buttons["todayDayActions"].label.hasPrefix(shown("Day actions, ")), "Day actions is read by its label")
     }
 
-    /// Debug builds bundle Hebrew (Release builds strip it until it ships), so a Hebrew phone gets the app in Hebrew.
-    func testHebrewPhoneGetsHebrew() throws {
-        try XCTSkipUnless(mode == "hebrew", "Needs TEST_RUNNER_SWEEP_MODE=hebrew")
+    /// Debug builds bundle every language (Release builds strip hidden ones), so a Hebrew, Spanish or Russian phone gets the app in its language.
+    func testPhoneGetsItsLanguage() throws {
+        guard let language else { throw XCTSkip("Needs TEST_RUNNER_SWEEP_MODE=hebrew, spanish or russian") }
         let app = launch(["--coach-ui-test", "--coach-navigation-start-today", "--diary-history-fixture"])
         XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 20))
         for name in ["Today", "Diary", "Progress", "Coach"] { XCTAssertTrue(tab(name, in: app).exists, "\(name) tab reads \(shown(name))") }
         let first = tab("Today", in: app).frame, last = tab("Coach", in: app).frame
         // The Duo's side rail stacks the tabs; testRightToLeftFlagMirrorsTheApp checks the screen beside it.
-        if abs(first.midY - last.midY) < 1 { XCTAssertGreaterThan(first.midX, last.midX, "Hebrew lays out right to left") }
+        if language.code == "he", abs(first.midY - last.midY) < 1 { XCTAssertGreaterThan(first.midX, last.midX, "Hebrew lays out right to left") }
         tab("Diary", in: app).tap()
         XCTAssertTrue(app.descendants(matching: .any)["diaryWeekStrip"].waitForExistence(timeout: 10))
-        let months = DateFormatter().then { $0.locale = Locale(identifier: "he_IL") }.monthSymbols ?? []
-        let texts = app.staticTexts.allElementsBoundByIndex.map { $0.label }
-        XCTAssertTrue(texts.contains { text in months.contains { text.contains($0) } }, "The day title uses a Hebrew Gregorian month: \(texts)")
+        let formatter = DateFormatter().then { $0.locale = Locale(identifier: language.locale) }
+        // Russian titles use the genitive month ("17 ноября"), Spanish the lowercase one ("17 de noviembre").
+        let months = (formatter.monthSymbols ?? []) + (formatter.standaloneMonthSymbols ?? [])
+        // One query per month: reading every label one by one races Pip's changing pose label.
+        let month = months.first { app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", $0)).firstMatch.exists }
+        XCTAssertNotNil(month, "The day title uses a \(language.code) month")
     }
 
     /// Names that stay in Latin letters in every language.
     /// "GMT" comes from the system's time-zone format, and Diagnostics is a Debug-only row.
-    static let latinNames = ["Apple Intelligence", "Dynamic Island", "Snap It", "ChatGPT", "OpenAI", "iPhone", "Mivu", "Apple", "USDA", "Siri", "iOS", "IBS", "AI", "GMT", "Diagnostics"]
+    static let latinNames = ["Apple Intelligence", "Dynamic Island", "Snap It", "ChatGPT", "OpenAI", "iPhone", "Mivu", "Apple", "USDA", "Siri", "iOS", "IBS", "AI", "GMT", "UTC", "Diagnostics"]
 
-    /// Every visible label on every screen is Hebrew, apart from names and the fixtures' own data.
-    func testTextIsHebrew() throws {
-        try XCTSkipUnless(mode == "hebrew", "Needs TEST_RUNNER_SWEEP_MODE=hebrew")
+    /// Every visible label on every screen is Hebrew or Russian, apart from names and the fixtures' own data.
+    // shortcut: Latin-letter detection can't tell Spanish from English; Spanish relies on languages.py check and the captures.
+    func testTextIsTranslated() throws {
+        guard let language else { throw XCTSkip("Needs TEST_RUNNER_SWEEP_MODE=hebrew or russian") }
+        try XCTSkipIf(language.code == "es", "Spanish is written in Latin letters")
+        // Names a language keeps in Latin letters, such as Russian's "Coach" tab.
+        let keptNames = language.names.filter { $0.key == $0.value }.map(\.key)
         visitAllScreens { name, app in
             let english = readWholeScreen(app).filter { label in
-                let rest = (Array(Self.fixtureData) + Self.latinNames).sorted { $0.count > $1.count }
+                let rest = (Array(Self.fixtureData) + Self.latinNames + keptNames).sorted { $0.count > $1.count }
                     .reduce(label) { $0.replacingOccurrences(of: $1, with: "") }
                 return !label.hasPrefix("pose:") && rest.unicodeScalars.contains { ("a"..."z").contains($0) || ("A"..."Z").contains($0) }
             }

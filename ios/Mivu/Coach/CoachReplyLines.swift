@@ -83,7 +83,7 @@ enum CoachReplyLines {
 
     static func number(_ value: Double, step: Double = 0) -> String {
         let shown = step > 0 ? (value / step).rounded() * step : value
-        return shown.formatted(.number.precision(.fractionLength(0...1)).locale(Locale(identifier: "en_US")))
+        return shown.formatted(.number.precision(.fractionLength(0...1)).locale(.current))
     }
 }
 

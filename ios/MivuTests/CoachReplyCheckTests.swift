@@ -106,7 +106,19 @@ import Testing
         #expect(!CoachReplyCheck.passes("בתפוח יש ~95 קק״ל.", allowed: allowed, receipts: [meal()], generalFacts: true))
         #expect(!CoachReplyCheck.passes("נשארו לך היום ~600 קק״ל.", allowed: allowed, receipts: receipts, generalFacts: true))
         // A language whose diary words aren't known grounds every number.
+        #expect(!CoachReplyCheck.passes("Aujourd'hui une pomme contient environ ~95 kcal.", allowed: allowed, receipts: receipts, generalFacts: true))
+    }
+
+    @Test func hedgedGeneralFactPassesInSpanishAndRussian() {
+        let receipts = [meal(.awaitingReview)]
+        let allowed = CoachReplyCheck.allowedNumbers(in: [], receipts: receipts)
+        #expect(CoachReplyCheck.passes("Una manzana mediana tiene aproximadamente 95 kcal.", allowed: allowed, receipts: receipts, generalFacts: true))
         #expect(!CoachReplyCheck.passes("Hoy llevas ~1800 kcal y te quedan ~200.", allowed: allowed, receipts: receipts, generalFacts: true))
+        #expect(CoachReplyCheck.passes("В яблоке примерно 95 ккал.", allowed: allowed, receipts: receipts, generalFacts: true))
+        #expect(!CoachReplyCheck.passes("Сегодня у тебя осталось ~600 ккал.", allowed: allowed, receipts: receipts, generalFacts: true))
+        // The model may answer in Spain's perfect tense or in formal вы.
+        #expect(!CoachReplyCheck.passes("Has comido aproximadamente 1800 kcal.", allowed: allowed, receipts: receipts, generalFacts: true))
+        #expect(!CoachReplyCheck.passes("Вы набрали около 2000 ккал.", allowed: allowed, receipts: receipts, generalFacts: true))
     }
 
     @Test func readsDigitsInAnyScript() {

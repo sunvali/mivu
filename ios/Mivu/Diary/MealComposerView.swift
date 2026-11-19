@@ -41,7 +41,7 @@ struct MealComposerView: View {
                 }
                 Section {
                     if let mealID = correctingMealID, let meal = model.meal(mealID) {
-                        LabeledContent("Waking day", value: model.day(meal.dayID)?.localDate ?? "Original meal day")
+                        LabeledContent("Waking day", value: model.day(meal.dayID)?.localDate ?? String(localized: "Original meal day", comment: "Meal composer: the waking day of a meal whose day has not loaded"))
                     } else if let dayID, let day = model.day(dayID) {
                         LabeledContent("Waking day", value: day.localDate)
                         Text("The meal will be recorded on this day. Time will be unspecified.").font(.subheadline).foregroundStyle(Color.diarySecondary)

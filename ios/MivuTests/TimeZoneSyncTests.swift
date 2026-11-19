@@ -45,5 +45,10 @@ struct TimeZoneSyncTests {
         #expect(store.state(for: a)?.mode == .pinned(zone: "Asia/Jerusalem", untilDeviceZone: nil) && store.state(for: b)?.mode == .automatic)
     }
     @Test func unknownZoneIsNotAClockChange() { #expect(!TimeZoneSync.clockDiffers("Nope/Zone", "UTC", at: now)) }
-    @Test func cityNames() { #expect(TimeZoneSync.city("America/New_York") == "New York" && TimeZoneSync.city("UTC") == "UTC") }
+    @Test func cityNames() {
+        #expect(TimeZoneSync.city("America/New_York", locale: Locale(identifier: "en")) == "New York" && TimeZoneSync.city("UTC") == "UTC")
+        #expect(TimeZoneSync.city("America/New_York", locale: Locale(identifier: "ru")) == "Нью-Йорк")
+        #expect(TimeZoneSync.city("America/Argentina/Buenos_Aires", locale: Locale(identifier: "es")) == "Buenos Aires")
+        #expect(TimeZoneSync.city("Etc/GMT+5", locale: Locale(identifier: "ru")) == "GMT+5")
+    }
 }

@@ -384,7 +384,7 @@ extension DiaryDatabase {
             let transaction = DiaryTransaction(database: self, head: head)
             guard let turn = try transaction.turn(id: turnID) else { throw DiaryError.notFound }
             var summaries: [String] = []
-            func number(_ value: Double) -> String { value.formatted(.number.grouping(.never).locale(Locale(identifier: "en_US"))) }
+            func number(_ value: Double) -> String { value.formatted(.number.grouping(.never).locale(.current)) }
             for receipt in turn.receipts {
                 let facts = Self.coachCommittedReceipt(receipt)
                 if let range = receipt.operationKey.range(of: "/undo/") {

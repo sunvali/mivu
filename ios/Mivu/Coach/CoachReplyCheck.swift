@@ -72,15 +72,17 @@ enum CoachReplyCheck {
         func grounded(_ text: some StringProtocol) -> Bool { numbers(in: String(text)).allSatisfy { allowed.contains(abs($0)) } }
         // A review-only turn counts nothing toward the day, so it may answer the question like a read-only turn.
         guard generalFacts, receipts.allSatisfy({ $0.mealID != nil && $0.submissionState == .awaitingReview }) else { return grounded(prose) }
-        let hedge = /~|\b(?i:about|around|roughly|approximately|typically|usually|nearly)\b/
+        let hedge = /~|\b(?i:about|around|roughly|approximately|typically|usually|nearly|aproximadamente|alrededor de|cerca de|normalmente|примерно|около|приблизительно|обычно|почти)\b/
         // A hedged sentence may skip grounding only when it doesn't describe the diary, and only in a language whose
         // diary words are known; any other language grounds every number. Hebrew words also match inside longer words
-        // ("ושלך"), which only fails closed.
-        // shortcut: English and Hebrew only; add a language's diary words when it ships.
+        // ("ושלך"), and Russian stems match every ending ("осталось", "твоя"), which only fails closed.
+        // shortcut: English, Hebrew, Spanish and Russian only; add a language's diary words when it ships.
         let diaryWords: Regex<Substring>
         switch NLLanguageRecognizer.dominantLanguage(for: prose) {
         case .english: diaryWords = /\b(?i:left|remaining|to go|so far|today|yesterday|this week|goal|target|budget|average|you're|you are|you've|you have|you had|you ate|your)\b/
         case .hebrew: diaryWords = /היום|אתמול|השבוע|נשאר|נותר|עד עכשיו|יעד|תקציב|ממוצע|שלך|לך|אכלת|שתית|שקלת/
+        case .spanish: diaryWords = /\b(?i:hoy|ayer|esta semana|te quedan?|restantes?|llevas|hasta ahora|meta|objetivo|presupuesto|promedio|tus?|has|ha|han|comiste|tomaste|bebiste|pesaste|registraste)\b/
+        case .russian: diaryWords = /(?i:сегодня|вчера|на этой неделе|остал|оста[её]т|пока что|цел[ьиюя]|норм|бюджет|средн|тво[йяеёи]|у тебя|\bты\b|\bвы\b|\bвам\b|ваш|набра|потрат|съел|съеден|выпи|записа|взвеш)/
         default: return grounded(prose)
         }
         return prose.split(separator: /[.!?]\s+|\n+/).allSatisfy { sentence in

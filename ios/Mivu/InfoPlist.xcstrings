@@ -16,6 +16,18 @@
             "state" : "translated",
             "value" : "Mivu"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu"
+          }
         }
       }
     },
@@ -30,6 +42,18 @@
           }
         },
         "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu"
+          }
+        },
+        "ru" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mivu"
@@ -51,6 +75,18 @@
             "state" : "translated",
             "value" : "המצלמה משמשת להוספת תמונות של ארוחות ליומן הפרטי שלך."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu usa la cámara para adjuntar fotos de tus comidas a tu diario privado."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu использует камеру, чтобы прикреплять фото еды к твоему личному дневнику."
+          }
         }
       }
     },
@@ -67,6 +103,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mivu קורא את האימונים שלך מ-Apple Health, למשל מ-Garmin Connect או מ-Apple Watch, כדי שהקלוריות הפעילות שלהם יתווספו לתקציב המזון היומי שלך. הם נשארים באייפון הזה."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu lee tus entrenamientos de la app Salud, como los de Garmin Connect o Apple Watch, para que sus calorías activas se sumen a tu presupuesto diario de alimentos. Se quedan en este iPhone."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu читает твои тренировки из приложения «Здоровье», например из Garmin Connect или Apple Watch, чтобы их активные калории добавлялись к дневной норме. Они остаются на этом iPhone."
           }
         }
       }
@@ -85,6 +133,18 @@
             "state" : "translated",
             "value" : "Mivu לא שומר שום דבר ב-Apple Health. הוא רק קורא את האימונים שלך כדי שהקלוריות הפעילות שלהם יתווספו לתקציב המזון היומי שלך."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu no guarda nada en Salud. Solo lee tus entrenamientos para que sus calorías activas se sumen a tu presupuesto diario de alimentos."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu ничего не сохраняет в «Здоровье». Приложение только читает твои тренировки, чтобы их активные калории прибавлялись к дневной норме."
+          }
         }
       }
     },
@@ -101,6 +161,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "המיקרופון מאזין כשמספרים על ארוחה, כדי לכתוב אותה בשיחה עם פיפ. השמע נשאר באייפון הזה ולא נשמר."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu escucha mientras dictas una comida para escribirla en Coach. El audio se queda en este iPhone y no se guarda."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu слушает, пока ты диктуешь еду, и превращает её в текст для коуча. Звук остаётся на этом iPhone и не сохраняется."
           }
         }
       }
@@ -119,6 +191,18 @@
             "state" : "translated",
             "value" : "הדיבור הופך לטקסט באייפון הזה, כדי שאפשר יהיה לבדוק אותו לפני השליחה."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu convierte en texto, en este iPhone, la comida que dictas, para que la revises antes de enviarla."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu превращает твою надиктованную еду в текст на этом iPhone, чтобы её можно было проверить перед отправкой."
+          }
         }
       }
     },
@@ -126,6 +210,18 @@
       "comment" : "Home-screen quick-action title: opens camera to log a meal",
       "localizations" : {
         "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Snap It"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Snap It"
+          }
+        },
+        "ru" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Snap It"

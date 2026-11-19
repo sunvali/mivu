@@ -31,6 +31,13 @@ struct LanguageTextTests {
         #expect(String(localized: "Weight chart: \(2) measured dates.") == "Weight chart: 2 measured dates.")
     }
 
+    /// The calorie band "Off" means away from the target, not the switched-off status that shares its English.
+    @Test func offBandIsNotTheSwitchStatus() throws {
+        #expect(ProgressBand.off.title == "Off")
+        let spanish = try #require(Bundle.main.path(forResource: "es", ofType: "lproj").flatMap(Bundle.init(path:)))
+        #expect(spanish.localizedString(forKey: "calorieBand.off", value: nil, table: nil) == "Desviado")
+    }
+
     @Test func weightUnitIsShownNotStored() {
         #expect(WeightEntry(measuredAt: Date(), value: 70, unit: "lb").shownUnit == "lb")
         #expect(WeightEntry(measuredAt: Date(), value: 70).shownUnit == "kg")

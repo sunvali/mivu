@@ -15,6 +15,18 @@
             "state" : "translated",
             "value" : "%1$@ / %2$@ קק״ל"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ / %2$@ kcal"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ / %2$@ ккал"
+          }
         }
       }
     },
@@ -25,6 +37,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "נאכלו %@ קלוריות"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ calorías consumidas"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Съедено калорий: %@"
           }
         }
       }
@@ -38,6 +62,18 @@
             "state" : "translated",
             "value" : "נאכלו %@ קלוריות."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ calorías consumidas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Съедено калорий: %@."
+          }
         }
       }
     },
@@ -49,6 +85,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "נותרו %@ קלוריות."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ calorías restantes."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Осталось калорий: %@."
           }
         }
       }
@@ -62,6 +110,18 @@
             "state" : "translated",
             "value" : "%@ קלוריות מעל היעד."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ calorías de más."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Калорий сверх нормы: %@."
+          }
         }
       }
     },
@@ -72,6 +132,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "נרשמו %@ קק״ל"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ kcal registradas"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Записано: %@ ккал"
           }
         }
       }
@@ -89,6 +161,18 @@
             "state" : "translated",
             "value" : "נאכלו %1$@ מתוך %2$@ קלוריות"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ de %2$@ calorías consumidas"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Съедено калорий: %1$@ из %2$@"
+          }
         }
       }
     },
@@ -100,6 +184,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ מעל"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ de más"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ сверх"
           }
         }
       }
@@ -113,6 +209,18 @@
             "state" : "translated",
             "value" : "לפחות %@"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "al menos %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "не менее %@"
+          }
         }
       }
     },
@@ -123,6 +231,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "נאכלו לפחות %@ קלוריות."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al menos %@ calorías consumidas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Съедено калорий: не менее %@."
           }
         }
       }
@@ -135,6 +255,18 @@
             "state" : "translated",
             "value" : "לפחות %@ קלוריות מעל היעד."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al menos %@ calorías de más."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Калорий сверх нормы: не менее %@."
+          }
         }
       }
     },
@@ -145,6 +277,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "נותרו לכל היותר %@ קלוריות."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Como máximo %@ calorías restantes."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Осталось калорий: не более %@."
           }
         }
       }
@@ -158,6 +302,18 @@
             "state" : "translated",
             "value" : "קלוריות"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calorías"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Калории"
+          }
         }
       }
     },
@@ -168,6 +324,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "הקלוריות עדיין לא ידועות."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aún no se conocen las calorías."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Калории пока неизвестны."
           }
         }
       }
@@ -187,6 +355,18 @@
             "state" : "translated",
             "value" : "פחמימות"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Carbohidratos"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Углеводы"
+          }
         }
       }
     },
@@ -198,6 +378,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "פיפ"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Coach"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Coach"
           }
         }
       }
@@ -217,6 +409,18 @@
             "state" : "translated",
             "value" : "שומן"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grasas"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Жиры"
+          }
         }
       }
     },
@@ -227,6 +431,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "קק״ל"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kcal"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ккал"
           }
         }
       }
@@ -239,6 +455,18 @@
             "state" : "translated",
             "value" : "קק״ל נאכלו"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kcal consumidas"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ккал съедено"
+          }
         }
       }
     },
@@ -249,6 +477,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "קק״ל נותרו"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kcal restantes"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ккал осталось"
           }
         }
       }
@@ -261,6 +501,18 @@
             "state" : "translated",
             "value" : "קק״ל מעל היעד"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kcal de más"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ккал сверх"
+          }
         }
       }
     },
@@ -272,6 +524,18 @@
             "state" : "translated",
             "value" : "קק״ל נרשמו"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kcal registradas"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ккал записано"
+          }
         }
       }
     },
@@ -279,6 +543,18 @@
       "comment" : "App name. Keep as is",
       "localizations" : {
         "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu"
+          }
+        },
+        "ru" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mivu"
@@ -293,6 +569,18 @@
             "state" : "translated",
             "value" : "התקדמות היום ב-Mivu"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Progreso del día en Mivu"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Прогресс дня в Mivu"
+          }
         }
       }
     },
@@ -303,6 +591,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "מתוך %@ קק״ל"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "de %@ kcal"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "из %@ ккал"
           }
         }
       }
@@ -316,6 +616,18 @@
             "state" : "translated",
             "value" : "פתיחת פיפ"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir Coach"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Открыть Coach"
+          }
         }
       }
     },
@@ -325,6 +637,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "פתיחת Mivu להיום"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir Mivu para hoy"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Открыть Mivu на сегодня"
           }
         }
       }
@@ -337,6 +661,18 @@
             "state" : "translated",
             "value" : "פתיחת פיפ ב-Mivu לשאלה."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre Mivu Coach para hacer una pregunta."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Открывает Mivu Coach: можно сразу задать вопрос."
+          }
         }
       }
     },
@@ -347,6 +683,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "פתיחת המצלמה לצילום ורישום ארוחה."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre la cámara para fotografiar una comida y registrarla."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Открывает камеру, чтобы сфотографировать еду и записать её."
           }
         }
       }
@@ -359,6 +707,18 @@
             "state" : "translated",
             "value" : "צילום ורישום ארוחה ב-Mivu."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotografía una comida y regístrala en Mivu."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сфотографируй еду и запиши её в Mivu."
+          }
         }
       }
     },
@@ -368,6 +728,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "כאן נעקוב אחרי היום שלך."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pip seguirá tu día aquí."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Здесь Пип будет следить за твоим днём."
           }
         }
       }
@@ -387,6 +759,18 @@
             "state" : "translated",
             "value" : "חלבון"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proteínas"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Белки"
+          }
         }
       }
     },
@@ -396,6 +780,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "הגדרת יעד"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Define una meta"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Задать норму"
           }
         }
       }
@@ -407,6 +803,18 @@
             "state" : "translated",
             "value" : "הגדרת Mivu"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configura Mivu"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Настроить Mivu"
+          }
         }
       }
     },
@@ -415,6 +823,18 @@
       "extractionState" : "manual",
       "localizations" : {
         "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Snap It"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Snap It"
+          }
+        },
+        "ru" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Snap It"
@@ -430,6 +850,18 @@
             "state" : "translated",
             "value" : "היום"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hoy"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сегодня"
+          }
         }
       }
     },
@@ -440,6 +872,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "הקלוריות של היום, עם Snap It ופיפ במרחק הקשה."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las calorías de hoy, con Snap It y Coach a un toque."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Калории за сегодня, а Snap It и Coach — в одно касание."
           }
         }
       }
