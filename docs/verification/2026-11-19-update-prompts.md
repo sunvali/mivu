@@ -27,17 +27,17 @@ Branch `feat/update-prompts`, from `main` at `7d94c658`.
 
 ## Evidence
 
-Source SHA `9ce3422aba5e4364a134d976bafee9d7dc6c27e7`. Xcode 27.2, iPhone 17
+Source SHA `40da790471058ceedb28e27b8b7d5f4326ec1021`. Xcode 27.2, iPhone 17
 Pro simulator on iOS 27.0 (`Mivu update-prompts`), test plan `Mivu`, run with
 xcodebuildmcp.
 
-Focused run: 21 passed, 0 failed, 0 skipped.
+Focused run: 23 passed, 0 failed, 0 skipped.
 
-- `AppUpdateTests` (13)
+- `AppUpdateTests` (14)
 - `RatingPromptTests`
-- `UpdatePromptUITests` (4): `testUpdateCardDismisses`,
+- `UpdatePromptUITests` (5): `testUpdateCardDismisses`,
   `testSettingsShowsUpdateRow`, `testRequiredUpdateBlocksAndOffersExport`,
-  `testWhatsNewShowsUntilGotIt`
+  `testBlockOnReturnClosesOpenSheets`, `testWhatsNewShowsUntilGotIt`
 - `FeedbackUITests` (the Settings Support section)
 - `DiaryUITests/testNewDayShowsMorningCheckInThatNeverBlocksLogging`
 
@@ -45,6 +45,15 @@ Screenshots of the card, block and What's New in light, dark and the largest
 text were reviewed by the UX reviewer. Its fixes were applied: readable button
 text in dark mode, a scrolling block at the largest text, a prominent Got it
 button, and Pip hidden at accessibility sizes.
+
+A whole-branch code review found two Important issues, and both are fixed with
+tests that failed first:
+
+- Sheets left open stayed above the block. The block now closes them, and
+  notifications, Coach requests and plan notices wait while blocked
+  (`testBlockOnReturnClosesOpenSheets`).
+- The hourly limit kept a blocked person waiting after the minimum was lowered.
+  A blocked app now checks on every return (`blockedChecksIgnoreTheHourlyLimit`).
 
 ## Not verified
 
