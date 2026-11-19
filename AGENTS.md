@@ -39,6 +39,10 @@ for this native app. No web frontend is required.
   or `design-system/mivu/` must update `docs/parity.md` or state
   `Parity: unchanged - <reason>` in a commit message or the PR description;
   `pre-push` and CI fail otherwise.
+- After each feature and before its PR, run one independent UX/UI review of
+  real screenshots (skip when nothing visible changed) and one senior QA pass
+  (focused tests plus simulator testing). Fix blocking findings and record both
+  verdicts in the PR.
 - Before merge, run Ponytail Review, fix blocking findings, and verify CI.
   Follow the owner's existing authorization for merging; do not add approval gates.
 - Use Conventional Commit PR/squash titles. All hosted jobs use `ubuntu-slim`
