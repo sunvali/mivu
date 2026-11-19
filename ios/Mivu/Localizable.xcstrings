@@ -35233,6 +35233,236 @@
           }
         }
       }
+    },
+    "Mivu %@ is available" : {
+      "comment" : "Title: a newer app version is in the App Store; %@ is the version number",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu %@ זמינה"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu %@ ya está disponible"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доступна Mivu %@"
+          }
+        }
+      }
+    },
+    "A newer version is ready in the App Store." : {
+      "comment" : "Update card body",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "גרסה חדשה זמינה ב-App Store."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hay una versión nueva en el App Store."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В App Store вышла новая версия."
+          }
+        }
+      }
+    },
+    "Update in App Store" : {
+      "comment" : "Button: opens Mivu's App Store page to update",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "עדכון ב-App Store"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actualizar en el App Store"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обновить в App Store"
+          }
+        }
+      }
+    },
+    "Hide update" : {
+      "comment" : "Accessibility label: hides the update card",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הסתרת העדכון"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ocultar actualización"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скрыть обновление"
+          }
+        }
+      }
+    },
+    "New in Mivu %@" : {
+      "comment" : "Card title: highlights of the version just installed; %@ is the version number",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מה חדש ב-Mivu %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Novedades de Mivu %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Новое в Mivu %@"
+          }
+        }
+      }
+    },
+    "Please update Mivu" : {
+      "comment" : "Title: this version is no longer allowed to run",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "צריך לעדכן את Mivu"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actualiza Mivu"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обнови Mivu"
+          }
+        }
+      }
+    },
+    "This version of Mivu needs an update to keep working. Your diary stays on this iPhone." : {
+      "comment" : "Body of the required-update screen",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הגרסה הזו של Mivu צריכה עדכון כדי להמשיך לעבוד. היומן שלך נשאר באייפון הזה."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta versión de Mivu necesita una actualización para seguir funcionando. Tu diario se queda en este iPhone."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этой версии Mivu нужно обновление, чтобы работать дальше. Твой дневник остаётся на этом iPhone."
+          }
+        }
+      }
+    },
+    "Export my diary" : {
+      "comment" : "Button on the required-update screen: exports the diary",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ייצוא היומן שלי"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportar mi diario"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Экспортировать дневник"
+          }
+        }
+      }
+    },
+    "Saves a copy to Files" : {
+      "comment" : "Caption under Export my diary",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שמירת עותק באפליקציית קבצים"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guarda una copia en Archivos"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сохраняет копию в Файлах"
+          }
+        }
+      }
+    },
+    "Update available" : {
+      "comment" : "Settings row: a newer version is in the App Store",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "עדכון זמין"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actualización disponible"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доступно обновление"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

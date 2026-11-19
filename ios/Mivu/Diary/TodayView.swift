@@ -85,6 +85,7 @@ struct DiaryRootView: View {
     @State private var coachHistory: CoachHistoryPresentation?
     @State private var hasLoaded = false
     @State private var showOnboarding = false
+    @State private var appUpdate = AppUpdate.shared
     @State private var quickLog = QuickLogRequest.shared
     @State private var quickLogOwner: DiarySelectionOwnership?
     /// The camera is up while the diary still loads, so the lens wakes during launch instead of after it.
@@ -168,6 +169,14 @@ struct DiaryRootView: View {
     @Environment(\.scenePhase) private var phase
     var body: some View {
         lifecycleView
+        .accessibilityHidden(appUpdate.isBlocked)
+        .overlay { if appUpdate.isBlocked { UpdateRequiredView(model: model) } }
+        .onChange(of: appUpdate.isBlocked, initial: true) { _, blocked in
+            guard blocked else { return }
+            routes.route = nil; coachHistory = nil; noteMealID = nil; notifiedMealID = nil; quickLogOwner = nil; quickLogEarly = false
+            // Sheets and covers owned deeper in the tree sit above the overlay, so close whatever is still presented.
+            (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.keyWindow?.rootViewController?.dismiss(animated: false)
+        }
         .alert("Could not complete action", isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })) {
             Button("OK", role: .cancel) { model.errorMessage = nil }
         } message: { Text(LocalizedStringKey(model.errorMessage ?? "")) }
@@ -184,11 +193,13 @@ struct DiaryRootView: View {
             for await _ in NotificationCenter.default.notifications(named: .NSSystemTimeZoneDidChange) where hasLoaded { await services.syncTimeZone(); if DiaryLaunch.rollsOverDays { await model.rollOverDay() } }
         }
         .task {
+            WhatsNew.shared.recordLaunch()
             if !DiaryLaunch.isUITest, ["today", "diary", "progress", "coach"].contains(restoredTab) { selectedTab = restoredTab }
             let hadSiriPrompts = !services.inbox.entries().isEmpty
             let createDefaultProfile = (DiaryLaunch.isUITest || DiaryLaunch.isSampleMode) && !ProcessInfo.processInfo.arguments.contains("--onboarding-ui-test")
             await services.loadDiary(createDefaultProfile: createDefaultProfile)
             hasLoaded = true
+            Task { await checkForUpdate() }
             await services.syncTimeZone()
             if DiaryLaunch.rollsOverDays { await model.rollOverDay() }
             resetCompanionProfile()
@@ -236,7 +247,7 @@ struct DiaryRootView: View {
         .onChange(of: connection.selectedModel) { _, _ in coach.cancel(); Task { await coach.waitForWorker(); coach.resume() } }
         .onChange(of: phase) { _, value in
             // iOS ends a Live Activity after about eight hours; each return to Mivu starts a fresh one.
-            if value == .active { syncDayProgressActivity(model.readModel); if hasLoaded { Task { await services.startHealth() } }; Task { await SnapItTip.refreshControlAdded() } }
+            if value == .active { syncDayProgressActivity(model.readModel); if hasLoaded { Task { await services.startHealth() } }; Task { await SnapItTip.refreshControlAdded() }; Task { await checkForUpdate() } }
             if value != .active {
                 companionRuntime.stop()
                 if value == .background {
@@ -454,8 +465,13 @@ struct DiaryRootView: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("timeZoneToast")
     }
+    /// UI tests and sample mode use the Debug fixtures instead of the network.
+    private func checkForUpdate() async {
+        guard !DiaryLaunch.isUITest, !DiaryLaunch.isSampleMode else { return }
+        await appUpdate.check()
+    }
     private func openQuickLog() {
-        guard quickLog.pending else { return }
+        guard quickLog.pending, !appUpdate.isBlocked else { return }
         // A shortcut is a request to shoot now, so the camera appears without the slide-up.
         var instant = Transaction(); instant.disablesAnimations = true
         guard hasLoaded else { withTransaction(instant) { quickLogEarly = true }; return }
@@ -468,22 +484,22 @@ struct DiaryRootView: View {
         withTransaction(instant) { quickLogOwner = owner; quickLogEarly = false }
     }
     private var showsNotEligibleNotice: Bool {
-        hasLoaded && !showOnboarding && routes.route == nil && coachHistory == nil && quickLogOwner == nil
+        hasLoaded && !showOnboarding && !appUpdate.isBlocked && routes.route == nil && coachHistory == nil && quickLogOwner == nil
             && noteMealID == nil && notifiedMealID == nil && connection.showsNotEligibleNotice
     }
     private var showsPlanWelcome: Bool {
-        hasLoaded && !showOnboarding && routes.route == nil && coachHistory == nil && quickLogOwner == nil
+        hasLoaded && !showOnboarding && !appUpdate.isBlocked && routes.route == nil && coachHistory == nil && quickLogOwner == nil
             && noteMealID == nil && notifiedMealID == nil && connection.showsPlanWelcome
     }
     private func openCoachRequest() {
-        guard quickLog.openCoach, hasLoaded else { return }
+        guard quickLog.openCoach, hasLoaded, !appUpdate.isBlocked else { return }
         quickLog.openCoach = false
         guard model.selection != nil, model.readModel != nil, !showOnboarding, !model.isChangingProfile else { return }
         routes.route = nil; coachHistory = nil; noteMealID = nil
         selectedTab = "coach"
     }
     private func openNotifiedMeal() {
-        guard let id = mealNotifications.openedMealID, hasLoaded else { return }
+        guard let id = mealNotifications.openedMealID, hasLoaded, !appUpdate.isBlocked else { return }
         mealNotifications.openedMealID = nil
         guard model.readModel != nil, !showOnboarding, !model.isChangingProfile, quickLogOwner == nil else { return }
         routes.route = nil; coachHistory = nil; noteMealID = nil
@@ -692,6 +708,13 @@ struct TodayView: View {
     @State private var savedMealID: UUID?
     @State private var choosingZone = false
     @AppStorage("morningCardDismissedDay") private var dismissedMorningDay = ""
+    private let update = AppUpdate.shared
+    private let whatsNew = WhatsNew.shared
+    @State private var updateCardHidden = false
+    private var showsMorningCard: Bool {
+        guard let day = model.activeDay, model.morningRecap != nil, model.todaysMeals.isEmpty else { return false }
+        return dismissedMorningDay != day.id.uuidString
+    }
     @Environment(\.isWideLayout) private var isWide
     // Sideways on the Duo, the summary and the meals sit in two columns; otherwise one list, unchanged order.
     @ViewBuilder private var leadingSections: some View {
@@ -712,11 +735,16 @@ struct TodayView: View {
                     }
                 }
             }
-            if let day = model.activeDay, let recap = model.morningRecap, model.todaysMeals.isEmpty, dismissedMorningDay != day.id.uuidString {
+            // One prompt at a time: the morning check-in, then What's New, then the update card.
+            if showsMorningCard, let day = model.activeDay, let recap = model.morningRecap {
                 Section {
                     MorningCheckInCard(model: model, day: day, previous: recap.previous, previousTarget: recap.target, todayWeight: snapshot.weight) {
                         withAnimation(.snappy) { dismissedMorningDay = day.id.uuidString }
                     }
+                }.transition(.opacity)
+            } else if let lines = whatsNew.pending {
+                Section {
+                    WhatsNewCard(version: whatsNew.version, lines: lines) { withAnimation(.snappy) { whatsNew.markSeen() } }
                 }.transition(.opacity)
             }
             Section {
@@ -737,6 +765,11 @@ struct TodayView: View {
                         intakeHero(totals: nutritionTotals([]).zeroIfEmpty, day: nil)
                     }
                 }.diarySummaryCard()
+            }
+            if !showsMorningCard, whatsNew.pending == nil, !updateCardHidden, update.showsCard(), let version = update.available {
+                Section {
+                    UpdateCard(version: version) { withAnimation(.snappy) { update.dismissCard(); updateCardHidden = true } }
+                }.transition(.opacity)
             }
         } else {
             Section { Text("Choose a private local profile in Settings to open your diary.").foregroundStyle(Color.diarySecondary) }
