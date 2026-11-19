@@ -7,8 +7,9 @@ submit.
 ## Done in the app
 
 - `PrivacyInfo.xcprivacy`: UserDefaults (CA92.1) and disk space (E174.1).
-  Photos, health, fitness and user content are declared as collected for app
-  functionality, linked to the user and not used for tracking.
+  Photos, health, fitness, user content, and (for Send feedback) email address
+  and other diagnostic data are declared as collected for app functionality,
+  linked to the user and not used for tracking.
 - OpenAI sharing consent appears before connecting ChatGPT. A connection saved
   before consent stays unused until the person agrees and reconnects.
 - Privacy Policy link and an "estimates, not medical advice" note in Settings.
@@ -46,9 +47,25 @@ submit.
 | Photos or Videos (meal photos) | Yes | Yes | No | App Functionality |
 | Health (height, weight history, age, sex, goal, diet notes) | Yes | Yes | No | App Functionality |
 | Fitness (logged workouts, workouts read from Apple Health) | Yes | Yes | No | App Functionality |
-| Other User Content (meal notes, Coach messages) | Yes | Yes | No | App Functionality |
+| Other User Content (meal notes, Coach messages, feedback messages you send) | Yes | Yes | No | App Functionality |
+| Email Address (only if typed into Send feedback, to reply) | Yes | Yes | No | App Functionality |
+| Other Diagnostic Data (app version, iOS version, device model and app language sent with feedback) | Yes | Yes | No | App Functionality |
 
 No analytics, advertising, location, contacts or identifiers are collected.
+
+The feedback rows are new with direct sending (Settings › Support › Send
+feedback). **The owner must add Email Address and Other Diagnostic Data to the
+App Privacy answers in App Store Connect before the build that sends feedback
+directly is submitted.** Diary data is never part of a feedback report.
+
+### Privacy policy paragraph (draft, for `mivu-site`)
+
+> **Feedback you send us.** If you use Send feedback in the app, we receive the
+> message you write, your email address if you choose to add one, and your app
+> version, iOS version, device model and app language. We use this only to
+> read and answer your report. It is delivered to our support inbox by email
+> through Cloudflare and is not stored on any other Mivu server. Your diary is
+> never included. To have a report deleted, write to support@mivuapp.com.
 
 ## Notes for Review (draft)
 
