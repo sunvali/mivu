@@ -25,7 +25,7 @@ calorías,contador de calorías,conteo de calorías,dieta,macros,proteínas,nutr
 Mivu es un diario de comidas privado con un Coach amigable. Cuéntale lo que comiste con tus propias palabras, toma una foto o usa la voz, y Mivu registra la comida con una estimación de calorías, proteínas, carbohidratos y grasas. Tú revisas y corriges cada estimación.
 
 REGISTRA COMO HABLAS
-• Describe una comida con palabras sencillas: “dos huevos, tostada y un café con leche”.
+• Describe una comida con palabras sencillas: “dos huevos, pan tostado y un café con leche”.
 • Agrega fotos de tu plato, o dicta y revisa el texto antes de enviarlo.
 • Registra tu peso de la mañana y tus entrenamientos en la misma conversación.
 • Pídele a Coach que corrija una cantidad o un alimento, y se actualiza tu diario.

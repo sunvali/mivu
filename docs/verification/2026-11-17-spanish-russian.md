@@ -58,6 +58,15 @@ Two more Spanish final passes (Mexico City; a US Hispanic reader) found 0 errors
 The only change: the listing keyword "diario de comidas", already in the name,
 became "conteo de calorías".
 
+At the owner's request, ten more Spanish reader agents with different backgrounds
+(Guadalajara, Bogotá, Buenos Aires, Santiago, Lima, San Juan, a Cuban-American
+senior in Miami, a Texas heritage speaker, Guatemala City, a Venezuelan
+nutritionist) found 0 errors; all ten would use the app in this Spanish. Applied:
+«pesos» → «registros de peso» (reads as money; 6 rows), «nueces» → «frutos
+secos» (walnuts only), «cupo» reworded (2 rows), three plainer rewrites for an
+older reader, one hard-to-read sentence, and the listing's «tostada» (a fried
+tortilla in Mexico) → «pan tostado».
+
 ## Code changes found by the review
 
 - The calorie band "Off" had the same key as the switched-off status, so it read

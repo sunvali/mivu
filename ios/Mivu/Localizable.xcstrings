@@ -3406,7 +3406,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Un día de registro sigue tu ciclo de sueño y vigilia."
+            "value" : "Un día de registro sigue tu propio ritmo de sueño y despertar."
           }
         },
         "ru" : {
@@ -5682,7 +5682,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Las copias de respaldo entran en conflicto. Se conservan tu diario local y el respaldo existente. Exporta una copia y resuelve la copia de la carpeta en Archivos antes de reintentar."
+            "value" : "La copia de respaldo y tu diario no coinciden. Se conservan los dos. Exporta una copia y arregla la copia de la carpeta en Archivos antes de reintentar."
           }
         },
         "ru" : {
@@ -7881,7 +7881,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "El análisis de Coach usa el cupo del plan de la cuenta de ChatGPT que elegiste, si cumple los requisitos, y está sujeto a sus límites de uso. Sin conexión, las capturas se guardan en tu iPhone."
+            "value" : "El análisis de Coach usa lo que incluye el plan de la cuenta de ChatGPT que elegiste, si cumple los requisitos, y está sujeto a sus límites de uso. Sin conexión, las capturas se guardan en tu iPhone."
           }
         },
         "ru" : {
@@ -10766,7 +10766,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Al eliminarlo se quitan de este iPhone las comidas, fotos, pesos y preferencias de este perfil. Los demás perfiles se conservan."
+            "value" : "Al eliminarlo se quitan de este iPhone las comidas, fotos, registros de peso y preferencias de este perfil. Los demás perfiles se conservan."
           }
         },
         "ru" : {
@@ -16317,7 +16317,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Credenciales locales eliminadas"
+            "value" : "Se quitó el acceso guardado en este iPhone"
           }
         },
         "ru" : {
@@ -16341,7 +16341,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Credenciales locales eliminadas. Revocación remota sin confirmar."
+            "value" : "Se quitó el acceso guardado en este iPhone. Aún no se confirmó que ChatGPT lo haya cancelado."
           }
         },
         "ru" : {
@@ -17830,7 +17830,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mivu pesos %@.csv"
+            "value" : "Mivu pesajes %@.csv"
           }
         },
         "ru" : {
@@ -19654,7 +19654,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alergia a las nueces"
+            "value" : "Alergia a los frutos secos"
           }
         },
         "ru" : {
@@ -22640,7 +22640,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Recomendado. Funciona con tu plan de ChatGPT y usa su cupo. Sin costo extra."
+            "value" : "Recomendado. Funciona con tu plan de ChatGPT y usa lo que este incluye. Sin costo extra."
           }
         },
         "ru" : {
@@ -22762,7 +22762,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Los alimentos registrados, lo que queda según ellos y las calorías quemadas estimadas siempre se muestran por separado."
+            "value" : "Lo que registraste, lo que te queda según eso y las calorías quemadas estimadas siempre se muestran por separado."
           }
         },
         "ru" : {
@@ -28522,7 +28522,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Esto quita las comidas, fotos, pesos y preferencias de %@ de este iPhone. Exporta o guarda un respaldo antes si quieres conservar tus registros. Los demás perfiles se conservan. Si eliminas tu último perfil, también se desconecta ChatGPT."
+            "value" : "Esto quita las comidas, fotos, registros de peso y preferencias de %@ de este iPhone. Exporta o guarda un respaldo antes si quieres conservar tus registros. Los demás perfiles se conservan. Si eliminas tu último perfil, también se desconecta ChatGPT."
           }
         },
         "ru" : {
@@ -28544,7 +28544,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Esto quita solo este entrenamiento y los detalles de sus ejercicios. Las comidas, los pesos y los demás entrenamientos se conservan."
+            "value" : "Esto quita solo este entrenamiento y los detalles de sus ejercicios. Las comidas, los registros de peso y los demás entrenamientos se conservan."
           }
         },
         "ru" : {
@@ -28566,7 +28566,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Esto quita solo este entrenamiento y los detalles de sus ejercicios. Las comidas, los pesos y los demás entrenamientos se conservan. No se volverá a importar."
+            "value" : "Esto quita solo este entrenamiento y los detalles de sus ejercicios. Las comidas, los registros de peso y los demás entrenamientos se conservan. No se volverá a importar."
           }
         },
         "ru" : {
@@ -28818,7 +28818,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Para estimar la nutrición y responder en Coach, Mivu envía a OpenAI, a través de tu cuenta de ChatGPT, lo que registras: comidas, fotos, mensajes, pesos, entrenamientos, objetivos y datos del perfil. Si agregas una clave de USDA, las búsquedas de alimentos van a USDA FoodData Central. Tu diario se queda en este iPhone y puedes desconectarte cuando quieras en Ajustes."
+            "value" : "Para estimar la nutrición y responder en Coach, Mivu envía a OpenAI, a través de tu cuenta de ChatGPT, lo que registras: comidas, fotos, mensajes, registros de peso, entrenamientos, objetivos y datos del perfil. Si agregas una clave de USDA, las búsquedas de alimentos van a USDA FoodData Central. Tu diario se queda en este iPhone y puedes desconectarte cuando quieras en Ajustes."
           }
         },
         "ru" : {

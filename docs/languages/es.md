@@ -58,6 +58,9 @@ speaker has read it yet.
 | daily target | meta diaria | |
 | weigh-in | pesaje | |
 | weight | peso | |
+| weights (records, in lists) | registros de peso; file name: pesajes | Never «pesos», which reads as money |
+| nut allergy, nuts | frutos secos | «nueces» means walnuts only in much of Latin America |
+| plan allowance | lo que incluye el plan | Not «cupo», which reads as a credit limit or seats |
 | workout | entrenamiento | |
 | streak | racha | |
 | check-in | repaso del día | |
