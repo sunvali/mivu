@@ -45,10 +45,8 @@ struct SampleBanner: View {
     }
 }
 
+/// The primary Today action: one photo, logged without a chat.
 struct DiaryCaptureAction: View {
-    var title: LocalizedStringKey = "Log with Pip"
-    var systemImage = "sparkles"
-    var identifier = "logMeal"
     let action: () -> Void
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     var body: some View {
@@ -60,16 +58,25 @@ struct DiaryCaptureAction: View {
     }
     private var button: some View {
         Button(action: action) {
-            Label(title, systemImage: systemImage).font(.headline)
-                .frame(maxWidth: .infinity, minHeight: 52)
+            VStack(spacing: 2) {
+                Label("Snap It", systemImage: "camera.fill").font(.headline)
+                // Coach also takes photos; the caption says this one skips the chat.
+                // Capped so the always-visible bar leaves room for the day at the largest sizes.
+                Text("Instant photo log").font(.caption).opacity(0.85).dynamicTypeSize(...DynamicTypeSize.accessibility1)
+            }
+            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+            .frame(maxWidth: .infinity, minHeight: 52)
         }
         .tint(.diaryAccent).foregroundStyle(Color.diaryActionText)
-        .accessibilityIdentifier(identifier)
+        .accessibilityHint("Logs one photo, no chat.")
+        .accessibilityIdentifier("snapIt")
     }
 }
 
-/// The secondary entry beside the Pip action: typing nutrition in by hand.
+/// A secondary entry under Snap It; by default, typing nutrition in by hand.
 struct DiaryManualAction: View {
+    var title: LocalizedStringKey = "Add manually"
+    var systemImage = "square.and.pencil"
     let identifier: String
     let action: () -> Void
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -82,7 +89,8 @@ struct DiaryManualAction: View {
     }
     private var button: some View {
         Button(action: action) {
-            Label("Add manually", systemImage: "number").font(.headline)
+            Label { Text(title) } icon: { Image(systemName: systemImage).foregroundStyle(Color.diaryAccent) }
+                .font(.headline)
                 .frame(maxWidth: .infinity, minHeight: 52)
         }
         .tint(.diaryAccent)
