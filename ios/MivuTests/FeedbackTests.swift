@@ -173,6 +173,27 @@ private final class FeedbackStub: URLProtocol, @unchecked Sendable {
         _ = await (first, second)
         #expect(calls.sends == 1); #expect(form.phase == .sent)
     }
+    @Test func includedLinesShowTheCoachErrorBeforeAnythingIsTyped() {
+        let form = FeedbackForm(kind: .bug, context: .coachOther, endpoint: nil, diagnostics: d) { _, _ in }
+        form.message = ""
+        #expect(form.includedLines.contains { $0.contains("coach_other") })
+        #expect(form.includedLines.contains { $0.contains("1.7.0") })
+    }
+    @Test func invalidEmailIsFlaggedOnlyWhenTyped() {
+        let calls = Calls(), form = form(calls, endpoint: endpoint)
+        form.email = ""; #expect(!form.emailInvalid)
+        form.email = "nope"; #expect(form.emailInvalid); #expect(!form.canSend)
+        form.email = "a@b.co"; #expect(!form.emailInvalid)
+    }
+    @Test func draftSurvivesLeavingTheScreenAndClearsWhenSent() async {
+        let calls = Calls(), first = form(calls, endpoint: endpoint)
+        first.message = "Draft text"; first.email = "a@b.co"
+        let reopened = FeedbackForm(kind: .idea, context: nil, endpoint: endpoint, diagnostics: d) { _, _ in }
+        #expect(reopened.message == "Draft text"); #expect(reopened.email == "a@b.co")
+        await reopened.submit(openMail: open(calls))
+        #expect(reopened.phase == .sent)
+        #expect(FeedbackForm(kind: .bug, context: nil, endpoint: endpoint, diagnostics: d) { _, _ in }.message.isEmpty)
+    }
     @Test func overLimitDisablesSend() {
         let calls = Calls(), form = form(calls, endpoint: endpoint)
         form.message = String(repeating: "a", count: 4001)

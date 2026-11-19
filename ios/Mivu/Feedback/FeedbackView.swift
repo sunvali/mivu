@@ -5,9 +5,12 @@ import SwiftUI
     typealias Send = @MainActor (FeedbackReport, URL) async throws -> Void
     typealias OpenMail = @MainActor (URL) async -> Bool
 
+    /// What the person typed, kept while the app runs so leaving the screen does not lose it.
+    private static var draft = (message: "", email: "")
+
     var kind: FeedbackKind
-    var message = ""
-    var email = ""
+    var message = FeedbackForm.draft.message { didSet { Self.draft.message = message } }
+    var email = FeedbackForm.draft.email { didSet { Self.draft.email = email } }
     private(set) var phase = Phase.editing
     let context: FeedbackContext?
     let endpoint: URL?
@@ -23,12 +26,21 @@ import SwiftUI
     var canSend: Bool { report != nil && phase != .sending }
     var count: Int { message.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count }
     var overLimit: Bool { count > Feedback.messageLimit }
+    var emailInvalid: Bool {
+        !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && FeedbackReport(kind: kind, message: "x", email: email, diagnostics: diagnostics, context: nil) == nil
+    }
+    /// Shown before anything is typed too, so the list never hides something that will be sent.
+    var includedLines: [String] { diagnostics.lines(context) }
 
     func submit(openMail: OpenMail) async {
         guard let report, phase != .sending else { return }
         guard let endpoint else { return await mail(report, openMail) }
         phase = .sending
-        do { try await send(report, endpoint); phase = .sent } catch { phase = .failed }
+        do {
+            try await send(report, endpoint)
+            phase = .sent; message = ""; email = ""
+        } catch { phase = .failed }
     }
 
     func sendByEmail(openMail: OpenMail) async {
@@ -44,9 +56,11 @@ import SwiftUI
 
 struct FeedbackView: View {
     @State private var form: FeedbackForm
+    @State private var copied = 0
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
-    @FocusState private var messageFocused: Bool
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @FocusState private var typing: Bool
 
     init(kind: FeedbackKind = .bug, context: FeedbackContext? = nil, endpoint: URL? = Feedback.endpoint,
          diagnostics: FeedbackDiagnostics = .current,
@@ -57,12 +71,11 @@ struct FeedbackView: View {
     var body: some View {
         Form {
             Section {
-                Picker("Type", selection: $form.kind) {
-                    ForEach(FeedbackKind.allCases, id: \.self) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented).frame(minHeight: 44).accessibilityIdentifier("feedbackKind")
+                picker.listRowBackground(Color.clear).listRowInsets(EdgeInsets())
+            }
+            Section {
                 TextField(prompt, text: $form.message, axis: .vertical)
-                    .lineLimit(5...12).focused($messageFocused)
+                    .lineLimit(typeSize.isAccessibilitySize ? 3...10 : 5...10).focused($typing)
                     .accessibilityLabel("Message").accessibilityIdentifier("feedbackMessage")
             } footer: {
                 if form.count > Feedback.messageLimit - 400 {
@@ -75,52 +88,86 @@ struct FeedbackView: View {
                 TextField("Email (optional)", text: $form.email)
                     .textContentType(.emailAddress).keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .submitLabel(.done).onSubmit { typing = false }.focused($typing)
                     .frame(minHeight: 44).accessibilityIdentifier("feedbackEmail")
-            } footer: { Text("Add it if you'd like a reply.") }
-            Section {
-                ForEach(form.report?.includedLines ?? form.diagnostics.lines, id: \.self) {
-                    Text($0).font(.subheadline).foregroundStyle(Color.diarySecondary)
+            } footer: {
+                if form.emailInvalid {
+                    Text("Enter a valid email address, or leave it empty.").foregroundStyle(Color.diaryError)
+                        .accessibilityIdentifier("feedbackEmailHint")
+                } else {
+                    Text("Add it if you'd like a reply.").foregroundStyle(Color.diarySecondary)
                 }
-            } header: { Text("Included with your report") } footer: { Text("Your diary is never included.") }
+            }
             Section {
-                switch form.phase {
-                case .sent:
-                    Label("Thanks! Your report is on its way.", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(Color.diarySuccess).frame(minHeight: 44).accessibilityIdentifier("feedbackSent")
-                default:
-                    if form.phase == .failed {
-                        Text("Couldn't send. Check your connection and try again.")
-                            .foregroundStyle(Color.diaryError).accessibilityIdentifier("feedbackError")
-                    }
-                    Button { Task { await form.submit(openMail: openMail) } } label: {
-                        HStack {
-                            Text(sendTitle).fontWeight(.semibold)
-                            if form.phase == .sending { Spacer(); ProgressView() }
-                        }.frame(maxWidth: .infinity, minHeight: 44)
-                    }
-                    .disabled(!form.canSend).accessibilityIdentifier("feedbackSend")
-                    if form.phase == .failed {
-                        Button("Send by email instead") { Task { await form.sendByEmail(openMail: openMail) } }
-                            .frame(minHeight: 44).accessibilityIdentifier("feedbackEmailFallback")
-                    }
-                    if form.phase == .mailUnavailable {
-                        Text("Email us at \(Feedback.supportAddress)").textSelection(.enabled)
-                            .frame(minHeight: 44).accessibilityIdentifier("feedbackAddress")
-                    }
-                }
+                Text(form.includedLines.joined(separator: " · ")).font(.subheadline).foregroundStyle(Color.diarySecondary)
+                    .accessibilityIdentifier("feedbackIncluded")
+            } header: {
+                Text("Included with your report").foregroundStyle(Color.diarySecondary)
+            } footer: {
+                Text("Your diary is never included.").foregroundStyle(Color.diarySecondary)
             }
         }
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
-        .scrollDismissesKeyboard(.interactively)
+        .listSectionSpacing(16)
+        .scrollDismissesKeyboard(.immediately)
+        .safeAreaInset(edge: .bottom) { actions }
         .navigationTitle("Send feedback").navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
+        .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { typing = false } } }
         .sensoryFeedback(.success, trigger: form.phase) { _, phase in phase == .sent }
+        .sensoryFeedback(.success, trigger: copied)
         .task(id: form.phase) {
             guard form.phase == .sent else { return }
-            messageFocused = false
             try? await Task.sleep(for: .seconds(1.5))
             if !Task.isCancelled { dismiss() }
         }
+    }
+
+    @ViewBuilder private var picker: some View {
+        let picker = Picker("Type", selection: $form.kind) {
+            ForEach(FeedbackKind.allCases, id: \.self) { Text($0.title).tag($0) }
+        }.accessibilityIdentifier("feedbackKind")
+        // A segmented control does not grow with the largest text sizes.
+        if typeSize.isAccessibilitySize { picker.pickerStyle(.menu).frame(minHeight: 44) }
+        else { picker.pickerStyle(.segmented).frame(minHeight: 44) }
+    }
+
+    /// Pinned above the keyboard, so the result of a tap is always visible.
+    private var actions: some View {
+        VStack(spacing: 8) {
+            switch form.phase {
+            case .sent:
+                Label("Thanks! Your report is on its way.", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(Color.diarySuccess).frame(minHeight: 50).accessibilityIdentifier("feedbackSent")
+            default:
+                if form.phase == .failed {
+                    Text("Couldn't send. Check your connection and try again.").font(.footnote)
+                        .foregroundStyle(Color.diaryError).accessibilityIdentifier("feedbackError")
+                }
+                if form.phase == .mailUnavailable {
+                    Text("Mail isn't set up on this device.").font(.footnote).foregroundStyle(Color.diarySecondary)
+                    Text("Email us at \(Feedback.supportAddress)").font(.footnote).textSelection(.enabled)
+                        .accessibilityIdentifier("feedbackAddress")
+                    Button("Copy address", systemImage: "doc.on.doc") { UIPasteboard.general.string = Feedback.supportAddress; copied += 1 }
+                        .frame(minHeight: 44).accessibilityIdentifier("feedbackCopyAddress")
+                }
+                Button { typing = false; Task { await form.submit(openMail: openMail) } } label: {
+                    HStack(spacing: 8) {
+                        if form.phase == .sending { ProgressView().tint(.white) }
+                        Text(sendTitle).fontWeight(.semibold)
+                    }.frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent).controlSize(.large).buttonBorderShape(.capsule).tint(Color.diaryAccent)
+                .disabled(!form.canSend).accessibilityIdentifier("feedbackSend")
+                if form.phase == .failed {
+                    Button("Send by email instead") { typing = false; Task { await form.sendByEmail(openMail: openMail) } }
+                        .frame(minHeight: 44).accessibilityIdentifier("feedbackEmailFallback")
+                }
+            }
+        }
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, 20).padding(.vertical, 12)
+        .frame(maxWidth: .infinity).background(Color.diaryCanvas)
     }
 
     private var prompt: String {

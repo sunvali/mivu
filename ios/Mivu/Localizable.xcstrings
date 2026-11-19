@@ -35164,6 +35164,75 @@
           }
         }
       }
+    },
+    "Enter a valid email address, or leave it empty." : {
+      "comment" : "Feedback form: shown under the email field when the address is not valid",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הזינו כתובת אימייל תקינה, או השאירו ריק."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Introduce un correo válido o déjalo vacío."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Введите действительный адрес или оставьте поле пустым."
+          }
+        }
+      }
+    },
+    "Mail isn't set up on this device." : {
+      "comment" : "Feedback form: the mail app could not be opened",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אפליקציית הדואר לא מוגדרת במכשיר הזה."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mail no está configurado en este dispositivo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Почта не настроена на этом устройстве."
+          }
+        }
+      }
+    },
+    "Copy address" : {
+      "comment" : "Feedback form: copies the support email address",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "העתקת הכתובת"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copiar dirección"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скопировать адрес"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

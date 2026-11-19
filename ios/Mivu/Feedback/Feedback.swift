@@ -29,7 +29,9 @@ struct FeedbackDiagnostics: Equatable, Sendable {
 
     @MainActor static var current: FeedbackDiagnostics {
         var system = utsname(); uname(&system)
-        let machine = withUnsafeBytes(of: &system.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+        // On a simulator `machine` is the Mac's architecture; the simulated model is in the environment.
+        let hardware = withUnsafeBytes(of: &system.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+        let machine = ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"] ?? hardware
         let info = Bundle.main.infoDictionary
         return FeedbackDiagnostics(
             appVersion: info?["CFBundleShortVersionString"] as? String ?? "?",
@@ -37,9 +39,10 @@ struct FeedbackDiagnostics: Equatable, Sendable {
             os: UIDevice.current.systemVersion, device: machine,
             language: Bundle.main.preferredLocalizations.first ?? "en")
     }
-    var lines: [String] {
+    func lines(_ context: FeedbackContext?) -> [String] {
         ["Mivu \(appVersion) (\(build))", "iOS \(os)",
          String(localized: "Device: \(device)"), String(localized: "Language: \(language)")]
+            + (context.map { [String(localized: "Coach error: \($0.rawValue)")] } ?? [])
     }
 }
 
@@ -64,8 +67,7 @@ struct FeedbackReport: Encodable, Equatable, Sendable {
 
     /// Everything sent besides what the person typed; shown on screen and appended to the email.
     var includedLines: [String] {
-        FeedbackDiagnostics(appVersion: appVersion, build: build, os: os, device: device, language: language).lines
-            + (context.map { [String(localized: "Coach error: \($0.rawValue)")] } ?? [])
+        FeedbackDiagnostics(appVersion: appVersion, build: build, os: os, device: device, language: language).lines(context)
     }
 }
 
