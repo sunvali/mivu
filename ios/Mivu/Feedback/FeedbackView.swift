@@ -65,7 +65,7 @@ struct FeedbackView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @FocusState private var typing: Bool
 
-    init(kind: FeedbackKind = .bug, context: FeedbackContext? = nil, endpoint: URL? = Feedback.endpoint,
+    init(kind: FeedbackKind = .bug, context: FeedbackContext? = nil, endpoint: URL? = Feedback.endpoint(),
          diagnostics: FeedbackDiagnostics = .current,
          send: @escaping FeedbackForm.Send = { try await Feedback.send($0, to: $1) }) {
         _form = State(initialValue: FeedbackForm(kind: kind, context: context, endpoint: endpoint, diagnostics: diagnostics, send: send))

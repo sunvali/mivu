@@ -78,9 +78,9 @@ enum Feedback {
     static let messageLimit = 4000
     static let supportAddress = "support@mivuapp.com"
 
-    /// Nil until a deployed endpoint is configured; the form then sends by email instead.
-    static var endpoint: URL? {
-        guard let text = Bundle.main.object(forInfoDictionaryKey: "MivuFeedbackEndpoint") as? String,
+    /// Nil when no endpoint is configured, and always in UI tests so they can never post; the form then sends by email.
+    static func endpoint(isUITest: Bool = DiaryLaunch.isUITest) -> URL? {
+        guard !isUITest, let text = Bundle.main.object(forInfoDictionaryKey: "MivuFeedbackEndpoint") as? String,
               let url = URL(string: text), url.scheme == "https", url.host() != nil else { return nil }
         return url
     }
