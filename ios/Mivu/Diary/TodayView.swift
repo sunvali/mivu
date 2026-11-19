@@ -415,7 +415,8 @@ struct DiaryRootView: View {
                         }.zoneToastInset(model: model, toast: timeZoneToast).toolbar { profileControl }.duoReadableWidth()
                     }
                 } secondary: {
-                    CoachSidePane(coach: coach, companionRuntime: companionRuntime, pane: $coachPane, openDiary: { selectedTab = "diary" })
+                    CoachSidePane(coach: coach, companionRuntime: companionRuntime, pane: $coachPane, openDiary: { selectedTab = "diary" },
+                                  shown: !coachChatExpanded)
                 }
             }
             .badge(coach.queuedSiri.count)

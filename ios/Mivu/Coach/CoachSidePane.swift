@@ -8,6 +8,8 @@ struct CoachSidePane: View {
     let companionRuntime: CompanionRuntime
     @Binding var pane: CoachPane?
     let openDiary: () -> Void
+    /// False while the chat is expanded and this pane is slid away; the chat then shows what it opens itself.
+    var shown = true
     /// Receipts already shown, so opening the app or turning the phone never moves the pane.
     @State private var seen = CoachPaneMemory()
     private struct OpenMeal: Equatable { let id: UUID; let exists: Bool }
@@ -28,7 +30,7 @@ struct CoachSidePane: View {
             TodayView(model: coach.diary, companionOutput: CompanionOutput(pose: .resting, playback: .hidden, reactionID: nil, nextDeadline: nil),
                       companionRuntime: companionRuntime, onCompanionContextChanged: { _ in }, isLiveDay: true)
                 .ignoresSafeArea(.container, edges: .trailing)
-                .navigationDestination(item: $pane) { pane in
+                .navigationDestination(item: shown ? $pane : .constant(nil)) { pane in
                     Group {
                         switch pane {
                         case .meal(let id): MealDetailView(model: coach.diary, mealID: id)
@@ -55,7 +57,7 @@ struct CoachSidePane: View {
             .rootViewController?.presentedViewController != nil
         let landing = seen.observe(owner: owner, receipts: turn.receipts, activeDayID: coach.diary.activeDay?.id,
                                    today: turn.displayLocalDate, modalOpen: modalOpen, showing: pane)
-        guard landing.jumps, landing.pane != pane else { return }
+        guard shown, landing.jumps, landing.pane != pane else { return }
         pane = landing.pane
         // Focus stays in the chat; VoiceOver only hears where the change went.
         let place = switch landing.pane {

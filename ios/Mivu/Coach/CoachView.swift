@@ -145,7 +145,7 @@ struct CoachView: View {
                            systemImage: chatExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right") {
                         // What the pane held is put away with it; otherwise it would be pushed over the chat being expanded.
                         if !chatExpanded { pane = nil }
-                        chatExpanded.toggle()
+                        withAnimation(reduceMotion ? nil : .smooth(duration: 0.35)) { chatExpanded.toggle() }
                     }
                         .frame(minWidth: 44, minHeight: 44).accessibilityIdentifier("coachExpand")
                 }

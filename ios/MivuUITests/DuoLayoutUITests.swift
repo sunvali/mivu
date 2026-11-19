@@ -185,6 +185,15 @@ import XCTest
         XCTAssertTrue(app.navigationBars["Meal"].waitForExistence(timeout: 5), "A card opens its meal over the expanded chat")
     }
 
+    func testExpandedChatStaysUncoveredWhenCoachSaves() throws {
+        let (app, input) = try launchCoach()
+        app.buttons["coachExpand"].firstMatch.tap()
+        send("Yesterday I had dessert", app, input)
+        XCTAssertTrue(app.buttons["coachMealLink"].waitForExistence(timeout: 20))
+        XCTAssertFalse(app.navigationBars["Diary"].waitForExistence(timeout: 2), "The slid-away pane does not push the changed day over the chat")
+        XCTAssertTrue(input.exists)
+    }
+
     func testDeletingPaneMealReturnsToToday() throws {
         let (app, input) = try launchCoach()
         send("Two eggs, three bread slices and salad", app, input)
@@ -216,16 +225,21 @@ import XCTest
         let besideWidth = input.frame.width
         let expand = app.buttons["coachExpand"].firstMatch
         XCTAssertTrue(expand.waitForExistence(timeout: 5)); expand.tap()
-        // Expanded, the chat takes the screen and the side pane is gone; Today keeps its own tab.
-        let gone = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !self.pane(app).exists }, object: app)
+        // Expanded, the chat takes the screen and the side pane slides off it (kept mounted); Today keeps its own tab.
+        let window = app.windows.firstMatch.frame
+        let gone = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in self.pane(app).frame.maxX <= window.minX + 1 }, object: app)
         XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 5), .completed, "The side pane leaves")
         XCTAssertGreaterThan(input.frame.width, besideWidth + 100, "The chat is wider than its half")
         XCTAssertLessThan(input.frame.minX, app.windows.firstMatch.frame.midX, "The chat reaches into the left half")
         XCTAssertEqual(input.value as? String, "draft text", "The draft survives expanding")
         app.buttons["coachExpand"].firstMatch.tap()
-        XCTAssertTrue(pane(app).waitForExistence(timeout: 5), "Collapsed, the side pane is back")
+        let back = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in self.pane(app).frame.minX >= window.minX - 1 }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [back], timeout: 5), .completed, "Collapsed, the side pane is back")
         XCTAssertLessThanOrEqual(pane(app).frame.maxX, input.frame.minX + 1)
         XCTAssertEqual(input.value as? String, "draft text", "The draft survives collapsing")
+        // The pane coming back must not empty the system's toolbar strip.
+        XCTAssertTrue(app.buttons["coachHistory"].firstMatch.waitForExistence(timeout: 5), "Chat history is still in reach")
+        XCTAssertTrue(app.buttons["coachExpand"].firstMatch.exists, "The chat can expand again")
     }
 
     func testUprightTapStillPushesOverChat() throws {

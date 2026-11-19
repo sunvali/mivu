@@ -79,6 +79,9 @@ private struct FoldReader: ViewModifier {
 struct DuoSplit<Primary: View, Secondary: View>: View {
     var axis: Axis = .horizontal
     var showsSecondary = true
+    /// True slides `secondary` off the screen's edge but keeps it mounted: a navigation stack rebuilt beside
+    /// another leaves the system's toolbar strip empty.
+    var hidesSecondary = false
     /// False splits evenly even across a crease, for when the keyboard has taken over the flat half.
     var followsCrease = true
     /// True puts `secondary` first (left, or on top). `primary` keeps its identity either way.
@@ -86,19 +89,20 @@ struct DuoSplit<Primary: View, Secondary: View>: View {
     @ViewBuilder let primary: Primary
     @ViewBuilder let secondary: Secondary
     @State private var fold: CGRect?
+    @State private var secondaryWidth: CGFloat?
 
     var body: some View {
         // Only a crease across this split's axis divides it; book splits side by side, table top and bottom.
-        let crease = showsSecondary && followsCrease ? fold.flatMap { (axis == .horizontal) == ($0.height > $0.width) ? $0 : nil } : nil
+        let crease = showsSecondary && !hidesSecondary && followsCrease ? fold.flatMap { (axis == .horizontal) == ($0.height > $0.width) ? $0 : nil } : nil
         let layout = axis == .horizontal ? AnyLayout(HStackLayout(spacing: 0)) : AnyLayout(VStackLayout(spacing: 0))
         // Zero minimums at a crease: a pane that reported an oversized height or width would shift
         // this split, move the crease in its coordinates, and re-lay out forever.
         let minimum: CGFloat? = crease == nil ? nil : 0
         layout {
-            if showsSecondary, secondaryLeading { pane(secondary, upTo: crease, minimum); gap(crease) }
+            if showsSecondary, secondaryLeading { secondaryPane(upTo: crease, minimum); gap(crease) }
             // `primary` stays between the two conditionals so it never remounts as `secondary` comes and goes.
             pane(primary, upTo: showsSecondary && secondaryLeading ? nil : crease, minimum)
-            if showsSecondary, !secondaryLeading { gap(crease); pane(secondary, upTo: nil, minimum) }
+            if showsSecondary, !secondaryLeading { gap(crease); secondaryPane(upTo: nil, minimum) }
         }
         .modifier(FoldReader { fold = $0 })
     }
@@ -110,6 +114,14 @@ struct DuoSplit<Primary: View, Secondary: View>: View {
             .frame(minWidth: minimum, maxWidth: .infinity, minHeight: minimum, maxHeight: .infinity)
             .frame(width: axis == .horizontal ? crease?.minX : nil, height: axis == .vertical ? crease?.minY : nil)
     }
+    /// Hidden, the pane keeps its last width in a zero-wide frame at the outer edge, so it slides out rather than squeezes.
+    private func secondaryPane(upTo crease: CGRect?, _ minimum: CGFloat?) -> some View {
+        pane(secondary, upTo: crease, minimum)
+            .frame(width: hidesSecondary ? secondaryWidth : nil)
+            .onGeometryChange(for: CGFloat.self, of: \.size.width) { if !hidesSecondary { secondaryWidth = $0 } }
+            .frame(width: hidesSecondary ? 0 : nil, alignment: secondaryLeading ? .trailing : .leading)
+            .accessibilityHidden(hidesSecondary)
+    }
     @ViewBuilder private func gap(_ crease: CGRect?) -> some View {
         if let crease { Color.clear.frame(width: axis == .horizontal ? crease.width : nil, height: axis == .vertical ? crease.height : nil) }
     }
@@ -120,7 +132,7 @@ struct DuoSplit<Primary: View, Secondary: View>: View {
 struct DuoBeside<Primary: View, Secondary: View>: View {
     /// True puts `secondary` on the left.
     var secondaryLeading = false
-    /// True while `primary` takes the whole screen sideways and `secondary` is put away. `primary` then lays
+    /// True while `primary` takes the whole screen sideways and `secondary` slides away. `primary` then lays
     /// out as it does upright (one readable column, records pushed over it), since nothing sits beside it.
     @Binding var primaryFills: Bool
     @ViewBuilder let primary: Primary
@@ -132,7 +144,7 @@ struct DuoBeside<Primary: View, Secondary: View>: View {
 
     var body: some View {
         let fills = canFill && primaryFills
-        DuoSplit(showsSecondary: isWide && !fills, secondaryLeading: secondaryLeading) {
+        DuoSplit(showsSecondary: isWide, hidesSecondary: fills, secondaryLeading: secondaryLeading) {
             primary
                 .environment(\.isWideLayout, isWide && !fills)
                 .transformEnvironment(\.horizontalSizeClass) { if fills { $0 = .compact } }
