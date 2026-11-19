@@ -102,3 +102,55 @@ The docs say nothing about mobile apps or App Store distribution.
 | Loopback redirect `http://127.0.0.1:<port>/auth/callback` | `OAuthAttempt.swift` |
 | Responses API with `store: false`, `stream: true` | `ResponsesClient.swift` |
 | Tokens stay with the user | Stored in the Keychain; sent only to OpenAI |
+
+## Every version update
+
+Before review:
+
+- Bump the version and build number. The new build must still read every
+  diary, archive and backup that older versions wrote.
+- Write "What's New" in plain words: one or two benefits, not a change log.
+- For a feature release, add up to three short highlight lines in
+  `WhatsNew.notes` (`ios/Mivu/Diary/AppUpdate.swift`), keyed by the new
+  version, and translate them in every catalog language. Fix-only versions
+  get none. Pip shows them once to people who updated.
+- Choose **Manually release this version** and **Release update over 7-day
+  phased release**.
+
+After approval:
+
+- Release when you can watch it. Check crashes and reviews in App Store Connect
+  every day of the phased release.
+- If something is broken, pause the phased release. Pausing is not a rollback,
+  and anyone can still update by hand. Ship a fixed build with a higher build
+  number and ask for an expedited review if the problem is serious.
+- Release Android with a Play staged rollout and watch crashes and ANRs the
+  same way.
+
+## Getting people to update
+
+- Most iPhones install updates automatically. That stays the baseline.
+- **Update card and Settings row:** once a version has been on the App Store
+  for 7 days, Today shows a dismissible "Mivu x.y is available" card. It shows
+  once, then one more time a week after it was dismissed. Settings › Support
+  shows "Update available" until the person updates.
+- **Rating:** the system prompt after a saved meal (`RatingPrompt`), never on
+  the first launch after an update.
+
+### Raising the emergency minimum
+
+Use this only when an old version is broken or unsafe. Any iOS version below
+the minimum shows a full-screen "Please update Mivu" with Update and Export
+only.
+
+1. Check that the fixed version is live in every country.
+2. Edit `mivu-site/public/app-config.json`, for example
+   `{"ios":"1.9.1","android":"1.0.0"}`.
+3. Run `aws sts get-caller-identity --profile mivu` and check that the account
+   is 582169340364.
+4. Run `mivu-site/deploy.sh`.
+5. Open https://mivuapp.com/app-config.json and check the new value. Apps pick
+   it up on their next launch or return to the app, at most once an hour.
+
+A failed fetch never blocks anyone, and it never unblocks anyone either. To
+undo a block, lower the minimum and deploy again.
