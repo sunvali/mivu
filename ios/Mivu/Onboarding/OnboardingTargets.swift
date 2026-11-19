@@ -42,7 +42,9 @@ struct OnboardingAnswers: Equatable {
     /// When the goal is reached at the real energy gap, which the floor can shrink; nil when weight holds or the gap is negligible.
     func goalDate(_ pace: ProfileAbout.Pace, from now: Date = Date(), year: Int = Calendar.current.component(.year, from: Date())) -> Date? {
         guard !holdsWeight, let kcal = estimate(pace, year: year).kcal else { return nil }
-        let kgPerWeek = abs(maintenance(year: year) - kcal) * 7 / 7700
+        // Signed toward the goal: at the floor a loss goal can mean eating above maintenance, which never arrives.
+        let gap = targetKg < weightKg ? maintenance(year: year) - kcal : kcal - maintenance(year: year)
+        let kgPerWeek = gap * 7 / 7700
         guard kgPerWeek >= 0.02 else { return nil }
         return now.addingTimeInterval(abs(weightKg - targetKg) / kgPerWeek * 7 * 86_400)
     }

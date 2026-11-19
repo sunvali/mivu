@@ -83,6 +83,9 @@ import Testing
         let weeks: Double = slow.timeIntervalSince(start) / (7 * 86_400), promised: Double = 4 / floored.weeklyKg(.faster)
         #expect(weeks > promised)
         #expect(answers(sex: .female, heightCm: 165, weightKg: 70, targetKg: 70, birthYear: 1990).goalDate(.steady, from: start) == nil)
+        // Maintenance below the floor: eating the floor gains weight, so no loss date can be promised.
+        var about = ProfileAbout(heightCm: 150, birthYear: 1940, sex: .female, pace: .steady); about.activity = .sitting
+        #expect(OnboardingAnswers(about: about, weightKg: 45, targetKg: 42).goalDate(.steady, from: start, year: 2026) == nil)
     }
 
     @Test func aReplyUnderTheFloorIsRejectedAndThePromptStatesIt() {
