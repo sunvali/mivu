@@ -677,6 +677,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "$(PRODUCT_DISPLAY_NAME)";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Mivu uses the camera to attach meal photos to your private diary.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Mivu reads your workouts from Apple Health, such as those from Garmin Connect or Apple Watch, so their active calories can add to your daily food budget. They stay on this iPhone.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Mivu does not save anything to Apple Health. It only reads your workouts so their active calories can add to your daily food budget.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Mivu listens while you speak a meal so it can type it into Coach. Audio stays on this iPhone and is not saved.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Mivu turns your spoken meal into text on this iPhone so you can review it before sending.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -704,6 +705,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "$(PRODUCT_DISPLAY_NAME)";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Mivu uses the camera to attach meal photos to your private diary.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Mivu reads your workouts from Apple Health, such as those from Garmin Connect or Apple Watch, so their active calories can add to your daily food budget. They stay on this iPhone.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Mivu does not save anything to Apple Health. It only reads your workouts so their active calories can add to your daily food budget.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Mivu listens while you speak a meal so it can type it into Coach. Audio stays on this iPhone and is not saved.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Mivu turns your spoken meal into text on this iPhone so you can review it before sending.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
