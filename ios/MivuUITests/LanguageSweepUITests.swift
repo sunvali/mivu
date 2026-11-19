@@ -191,7 +191,7 @@ import XCTest
 
     /// Debug builds bundle every language (Release builds strip hidden ones), so a Hebrew, Spanish or Russian phone gets the app in its language.
     func testPhoneGetsItsLanguage() throws {
-        let language = try XCTUnwrap(language, "Needs TEST_RUNNER_SWEEP_MODE=hebrew, spanish or russian")
+        guard let language else { throw XCTSkip("Needs TEST_RUNNER_SWEEP_MODE=hebrew, spanish or russian") }
         let app = launch(["--coach-ui-test", "--coach-navigation-start-today", "--diary-history-fixture"])
         XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 20))
         for name in ["Today", "Diary", "Progress", "Coach"] { XCTAssertTrue(tab(name, in: app).exists, "\(name) tab reads \(shown(name))") }
@@ -215,7 +215,7 @@ import XCTest
     /// Every visible label on every screen is Hebrew or Russian, apart from names and the fixtures' own data.
     // shortcut: Latin-letter detection can't tell Spanish from English; Spanish relies on languages.py check and the captures.
     func testTextIsTranslated() throws {
-        let language = try XCTUnwrap(language, "Needs TEST_RUNNER_SWEEP_MODE=hebrew or russian")
+        guard let language else { throw XCTSkip("Needs TEST_RUNNER_SWEEP_MODE=hebrew or russian") }
         try XCTSkipIf(language.code == "es", "Spanish is written in Latin letters")
         // Names a language keeps in Latin letters, such as Russian's "Coach" tab.
         let keptNames = language.names.filter { $0.key == $0.value }.map(\.key)

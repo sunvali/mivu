@@ -84,6 +84,13 @@ Swift callers, then an editor pass (Russian prefills follow the existing «На
 (spanish, russian, hebrew) and `testTextIsTranslated` (russian) pass. These 51
 strings had no separate review pass.
 
+Ponytail Review (independent) before merge: the two language sweep tests failed
+instead of skipping without a sweep mode (fixed; both skip in a default run), and
+`CoachReplyCheck` missed Spain's perfect tense ("Has comido…") and formal «вы»
+(fixed, with test lines; `CoachReplyCheckTests` 20 passed). Accepted: English
+city names now follow ICU ("Ho Chi Minh City" for `Asia/Saigon`), and numbers
+follow the phone's region rather than the app language.
+
 ## Code changes found by the review
 
 - The calorie band "Off" had the same key as the switched-off status, so it read

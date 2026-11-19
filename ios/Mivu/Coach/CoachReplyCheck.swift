@@ -81,8 +81,8 @@ enum CoachReplyCheck {
         switch NLLanguageRecognizer.dominantLanguage(for: prose) {
         case .english: diaryWords = /\b(?i:left|remaining|to go|so far|today|yesterday|this week|goal|target|budget|average|you're|you are|you've|you have|you had|you ate|your)\b/
         case .hebrew: diaryWords = /היום|אתמול|השבוע|נשאר|נותר|עד עכשיו|יעד|תקציב|ממוצע|שלך|לך|אכלת|שתית|שקלת/
-        case .spanish: diaryWords = /\b(?i:hoy|ayer|esta semana|te quedan?|restantes?|llevas|hasta ahora|meta|objetivo|presupuesto|promedio|tus?|comiste|tomaste|bebiste|pesaste|registraste)\b/
-        case .russian: diaryWords = /(?i:сегодня|вчера|на этой неделе|остал|оста[её]т|пока что|цел[ьиюя]|норм|бюджет|средн|тво[йяеёи]|у тебя|\bты\b|съел|съеден|выпи|записа|взвеш)/
+        case .spanish: diaryWords = /\b(?i:hoy|ayer|esta semana|te quedan?|restantes?|llevas|hasta ahora|meta|objetivo|presupuesto|promedio|tus?|has|ha|han|comiste|tomaste|bebiste|pesaste|registraste)\b/
+        case .russian: diaryWords = /(?i:сегодня|вчера|на этой неделе|остал|оста[её]т|пока что|цел[ьиюя]|норм|бюджет|средн|тво[йяеёи]|у тебя|\bты\b|\bвы\b|\bвам\b|ваш|набра|потрат|съел|съеден|выпи|записа|взвеш)/
         default: return grounded(prose)
         }
         return prose.split(separator: /[.!?]\s+|\n+/).allSatisfy { sentence in
