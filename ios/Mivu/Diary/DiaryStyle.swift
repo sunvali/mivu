@@ -178,6 +178,29 @@ struct DiaryMetric: View {
     }
 }
 
+/// Protein, carbs and fat side by side, or stacked when large text or a long word ("Carbohidratos") leaves no room.
+struct DiaryMacroRow: View {
+    let protein: Double?
+    let carbs: Double?
+    let fat: Double?
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) { metrics(divided: true) }
+            VStack(alignment: .leading, spacing: 12) { metrics(divided: false) }
+        }
+    }
+    @ViewBuilder private func metrics(divided: Bool) -> some View {
+        metric("Protein", protein, .diaryProtein)
+        if divided { Divider().frame(height: 32) }
+        metric("Carbs", carbs, .diaryCarbs)
+        if divided { Divider().frame(height: 32) }
+        metric("Fat", fat, .diaryFat)
+    }
+    private func metric(_ title: LocalizedStringKey, _ grams: Double?, _ color: Color) -> some View {
+        DiaryMetric(title: title, value: grams.map { String(localized: "\($0.formatted(.number.precision(.fractionLength(0)))) g") }, color: color)
+    }
+}
+
 struct DiarySectionLabel: View {
     let title: LocalizedStringKey
     let symbol: String

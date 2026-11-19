@@ -429,18 +429,21 @@ struct DiaryRootView: View {
         }
     }
     private func timeZoneToast(_ notice: TimeZoneSwitch) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "globe").foregroundStyle(Color.diaryAccent).accessibilityHidden(true)
-            Text("Now on \(TimeZoneSync.city(notice.to)) time").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryText)
-            Spacer(minLength: 8)
-            Button { Task { await model.keepPreviousTimeZone() } } label: {
-                Text("Keep \(TimeZoneSync.city(notice.from))").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryAccent)
-                    .frame(minWidth: 44, minHeight: 44).contentShape(.rect)
-            }.accessibilityIdentifier("timeZoneKeep")
+        let globe = Image(systemName: "globe").foregroundStyle(Color.diaryAccent).accessibilityHidden(true)
+        let now = Text("Now on \(TimeZoneSync.city(notice.to)) time").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryText)
+        let keep = Button { Task { await model.keepPreviousTimeZone() } } label: {
+            Text("Keep \(TimeZoneSync.city(notice.from))").font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryAccent)
+                .frame(minWidth: 44, minHeight: 44).contentShape(.rect)
+        }.accessibilityIdentifier("timeZoneKeep")
+        // One row while both fit unwrapped; at large text sizes or with long translations, the button goes below.
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) { globe; now.fixedSize(); Spacer(minLength: 8); keep.fixedSize() }
+            VStack(alignment: .leading, spacing: 0) { HStack(alignment: .firstTextBaseline, spacing: 12) { globe; now }; keep }
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.leading, 16).padding(.trailing, 12).padding(.vertical, 6)
-        .background(Color.diarySurface, in: .capsule)
-        .overlay(Capsule().strokeBorder(Color.diaryRule))
+        .background(Color.diarySurface, in: .rect(cornerRadius: 28, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(Color.diaryRule))
         .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
         .padding(.horizontal, 16).padding(.bottom, 8)
         .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
@@ -920,21 +923,12 @@ struct TodayView: View {
                     if day == nil { Text("No meals recorded").font(.caption).foregroundStyle(Color.diarySecondary) }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
-            HStack(spacing: 8) {
-                heroMetric("Protein", value: totals.protein, color: .diaryProtein)
-                Divider().frame(height: 32)
-                heroMetric("Carbs", value: totals.carbs, color: .diaryCarbs)
-                Divider().frame(height: 32)
-                heroMetric("Fat", value: totals.fat, color: .diaryFat)
-            }
+            DiaryMacroRow(protein: totals.protein, carbs: totals.carbs, fat: totals.fat)
             if totals.unknownItemCount > 0 {
                 Text("Some nutrients are unknown. Recorded totals may be incomplete.")
                     .font(.caption).foregroundStyle(Color.diarySecondary)
             }
         }
-    }
-    private func heroMetric(_ title: LocalizedStringKey, value: Double?, color: Color) -> some View {
-        DiaryMetric(title: title, value: value.map { String(localized: "\($0.formatted(.number.precision(.fractionLength(0)))) g") }, color: color)
     }
 
     @ViewBuilder private func todayGoal(snapshot: DiaryReadModel, day: TrackingDay) -> some View {
