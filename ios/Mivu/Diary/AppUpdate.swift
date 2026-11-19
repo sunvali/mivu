@@ -6,7 +6,10 @@ private func isOlder(_ version: String, than other: String) -> Bool { version.co
 /// A newer App Store version for the update card and Settings row, and the website's emergency minimum.
 /// Neither request carries anything about the person.
 @MainActor @Observable final class AppUpdate {
-    static let lookupURL = URL(string: "https://itunes.apple.com/lookup?id=6826633410")!
+    /// The bare lookup is cached stale by Apple; a storefront and a per-check stamp get the current answer.
+    static func lookupURL(now: Date) -> URL {
+        URL(string: "https://itunes.apple.com/lookup?id=6826633410&country=us&t=\(Int(now.timeIntervalSince1970))")!
+    }
     static let configURL = URL(string: "https://mivuapp.com/app-config.json")!
     static let shared: AppUpdate = {
         let update = AppUpdate(defaults: DiaryLaunch.defaults, version: bundleVersion)
@@ -45,7 +48,7 @@ private func isOlder(_ version: String, than other: String) -> Bool { version.co
         // A blocked person checks every time, so a lowered minimum frees them on their next return.
         if !isBlocked, let lastCheck, now.timeIntervalSince(lastCheck) < 3_600 { return }
         lastCheck = now
-        async let store = fetch(Lookup.self, from: Self.lookupURL)
+        async let store = fetch(Lookup.self, from: Self.lookupURL(now: now))
         async let config = fetch(Config.self, from: Self.configURL)
         if let item = await store?.results.first {
             available = isOlder(version, than: item.version) && now.timeIntervalSince(item.currentVersionReleaseDate) >= 7 * 86_400 ? item.version : nil

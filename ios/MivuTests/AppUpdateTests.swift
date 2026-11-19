@@ -6,6 +6,7 @@ import Testing
 private final class UpdateStub: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var replies: [String: (Int, String)] = [:]
     nonisolated(unsafe) static var offline = false
+    nonisolated(unsafe) static var storeURL: URL?
 
     static func session(store: (Int, String)? = nil, config: (Int, String)? = nil, offline: Bool = false) -> URLSession {
         replies = [:]
@@ -19,6 +20,7 @@ private final class UpdateStub: URLProtocol, @unchecked Sendable {
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
+        if request.url?.host == "itunes.apple.com" { Self.storeURL = request.url }
         guard !Self.offline, let (status, body) = Self.replies[request.url?.host ?? ""] else {
             client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet)); return
         }
@@ -48,6 +50,14 @@ private final class UpdateStub: URLProtocol, @unchecked Sendable {
         let phasing = update(session: UpdateStub.session(store: store("1.9.0", daysAgo: 6)))
         await phasing.check(now: now)
         #expect(phasing.available == nil)
+    }
+
+    /// The bare lookup URL is served stale by Apple's cache (1.2.0 while 1.4.1 was live, seen 2026-11-19).
+    @Test func lookupAsksForAFreshUSStorefrontAnswer() async {
+        await update(session: UpdateStub.session(store: store("1.9.0", daysAgo: 8))).check(now: now)
+        let query = URLComponents(url: UpdateStub.storeURL!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        #expect(query.contains(URLQueryItem(name: "country", value: "us")))
+        #expect(query.contains(URLQueryItem(name: "t", value: "1800000000")))
     }
 
     @Test func olderStoreVersionShowsNothing() async {
