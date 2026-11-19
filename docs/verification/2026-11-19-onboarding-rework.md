@@ -61,3 +61,12 @@ These ran on `fe51abd0`'s parent work, before the Tune shortcut and the accessib
 - Hebrew, Spanish and Russian text. It was checked only by `languages.py`.
 - The full UI suite. It wasn't run, by the owner's preference for focused runs.
 - Android. It follows in a later PR.
+
+## Review fix
+
+The Ponytail Review found that a loss goal could show a goal month even when the calorie floor sat above maintenance. In that case eating at the floor gains weight, so the date can never arrive.
+
+- **Fix:** the goal date now uses the signed energy gap toward the goal, and shows no date when there is no loss.
+- **Source:** `0189d550e2a9d31dc05252f73fb9867c3e9134b5`.
+- **Test:** `goalDateFollowsTheRealEnergyGap` gained that case. It failed before the fix and passes after.
+- **Result:** `OnboardingTargetsTests` and `OnboardingSetupSaveTests`, 15 passed and 0 failed, on the same fresh iPhone 17 Pro simulator on iOS 27.0.
