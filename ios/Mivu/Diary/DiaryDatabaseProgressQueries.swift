@@ -16,6 +16,13 @@ extension DiaryDatabase {
         }
     }
 
+    /// Distinct diary days holding at least one saved meal; proposals awaiting acceptance do not count.
+    func loggedDayCount(expectedProfileID: UUID) throws -> Int {
+        try domainRead(expectedProfileID: expectedProfileID) { _ in
+            try mutationInteger("SELECT COUNT(DISTINCT parent) FROM meal WHERE json_extract(CAST(payload AS TEXT), '$.revision') > 0")
+        }
+    }
+
     /// Saved foods with known energy, grouped by case- and space-insensitive name; the newest spelling names the group.
     func topFoods(from start: String, through end: String, limit: Int, expectedProfileID: UUID) throws -> [TopFood] {
         guard validLocalDate(start), validLocalDate(end), limit > 0 else { throw CoachError.invalidArguments }
