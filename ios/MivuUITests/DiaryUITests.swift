@@ -128,7 +128,7 @@ import XCTest
         XCTAssertEqual(Set(heights.map { Int($0.rounded()) }).count, 4, "It grows one line at a time to four lines: \(heights)")
         XCTAssertEqual(heights.last ?? 0, tallest, accuracy: 1)
     }
-    func testRedoSetupFromSettingsKeepsKeyboardNextAndDone() {
+    func testRedoSetupFromSettingsKeepsKeyboardDone() {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-navigation-start-today", "--proof-english"]
         app.launch()
@@ -143,68 +143,80 @@ import XCTest
         let next = app.buttons["onboardingNext"]
         XCTAssertTrue(next.waitForExistence(timeout: 5))
         next.tap()
-        // An empty height focuses itself, as on a real first run.
+        if app.buttons["cm"].waitForExistence(timeout: 3) { app.buttons["cm"].tap() }
+        let height = app.textFields["onboardingHeight"]
+        XCTAssertTrue(height.waitForExistence(timeout: 5))
+        height.tap()
         XCTAssertTrue(app.keyboards.element.waitForExistence(timeout: 5))
         // The number pad has no return key; without this bar the person cannot leave the field.
-        let keyboardNext = app.buttons["keyboardNext"], keyboardDone = app.buttons["keyboardDone"]
-        XCTAssertTrue(keyboardNext.waitForExistence(timeout: 3) && keyboardNext.isHittable)
-        XCTAssertTrue(keyboardDone.isHittable)
-        keyboardDone.tap()
+        let done = app.buttons["keyboardDone"]
+        XCTAssertTrue(done.waitForExistence(timeout: 3) && done.isHittable)
+        done.tap()
         XCTAssertTrue(next.waitForExistence(timeout: 3) && next.isHittable)
+    }
+    /// Answers every question with metric units, the 1990 birth year and Female, then leaves the targets screen open.
+    private func answerSetup(in app: XCUIApplication) -> XCUIElement {
+        let next = app.buttons["onboardingNext"]
+        XCTAssertTrue(next.waitForExistence(timeout: 10))
+        next.tap()
+        XCTAssertTrue(app.buttons["cm"].waitForExistence(timeout: 5))
+        app.buttons["cm"].tap()
+        replace(app.textFields["onboardingHeight"], with: "170")
+        app.buttons["keyboardDone"].tap()
+        next.tap()
+        app.buttons["kg"].tap()
+        replace(app.textFields["onboardingWeight"], with: "80")
+        app.buttons["keyboardDone"].tap()
+        // Dragging the ruler left raises the weight in 0.1 kg steps; typing then sets it exactly again.
+        app.descendants(matching: .any)["onboardingWeightRuler"].swipeLeft()
+        let dragged = (app.textFields["onboardingWeight"].value as? String).flatMap(Double.init) ?? 0
+        XCTAssertGreaterThan(dragged, 80)
+        XCTAssertEqual(dragged * 10, (dragged * 10).rounded(), accuracy: 0.001)
+        replace(app.textFields["onboardingWeight"], with: "80")
+        app.buttons["keyboardDone"].tap()
+        next.tap()
+        let year = app.pickerWheels.element
+        XCTAssertTrue(year.waitForExistence(timeout: 5))
+        year.adjust(toPickerWheelValue: "1990")
+        next.tap()
+        // A sex card answers and moves on; there is no Continue on this screen.
+        XCTAssertFalse(next.exists)
+        app.buttons["onboardingSex-female"].tap()
+        let target = app.textFields["onboardingTarget"]
+        XCTAssertTrue(target.waitForExistence(timeout: 5))
+        XCTAssertEqual(target.value as? String, "80", "The goal starts at the current weight")
+        replace(target, with: "72")
+        app.buttons["keyboardDone"].tap()
+        XCTAssertTrue(app.staticTexts["8 kg to lose"].waitForExistence(timeout: 3))
+        next.tap()
+        XCTAssertTrue(app.buttons["onboardingActivity-some"].isSelected, "On my feet some is the default activity")
+        XCTAssertTrue(app.buttons["onboardingPace-steady"].isSelected)
+        next.tap() // activity and pace
+        next.tap() // diet
+        XCTAssertTrue(app.staticTexts["Estimate"].waitForExistence(timeout: 5))
+        return next
     }
     func testFirstRunOpensSetupWithoutInventingRecords() {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--onboarding-ui-test", "--proof-english"]
         app.launch()
-        // No name to invent: the first diary is created and Pip's setup opens. Answer, skip ChatGPT, save the estimate.
-        let next = app.buttons["onboardingNext"]
-        XCTAssertTrue(next.waitForExistence(timeout: 10))
-        next.tap()
-        let height = app.textFields["onboardingHeight"]
-        XCTAssertTrue(height.waitForExistence(timeout: 5))
-        height.tap(); height.typeText("170") // the keyboard's Next walks to weight, then birth year
-        app.buttons["keyboardNext"].tap(); app.typeText("80")
-        app.buttons["keyboardNext"].tap(); app.typeText("1990")
-        app.buttons["keyboardDone"].tap()
-        next.tap()
-        let target = app.textFields["onboardingTarget"]
-        XCTAssertTrue(target.waitForExistence(timeout: 5))
-        target.tap(); target.typeText("72")
-        app.buttons["keyboardDone"].tap()
-        next.tap() // goal, steady pace
-        next.tap() // diet
-        app.buttons["onboardingSkipConnect"].tap()
-        XCTAssertTrue(app.staticTexts["Estimate"].waitForExistence(timeout: 5))
-        next.tap()
+        // No name to invent: the first diary is created and Pip's setup opens. Answer, keep the estimate, save it.
+        let save = answerSetup(in: app)
+        XCTAssertTrue(app.buttons["onboardingTune"].exists, "ChatGPT tuning is offered after the estimate, not before it")
+        save.tap()
         XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.tabBars.buttons["Today"].isSelected)
         XCTAssertEqual(app.buttons.matching(identifier: "mealRow").count, 0)
         app.buttons["profileSettings"].tap()
         XCTAssertTrue(app.buttons["localProfiles"].label.contains("My diary"))
     }
-    func testSetupSkipsConnectForAPlanThatCannotBeUsed() {
+    func testSetupHidesTuneForAPlanThatCannotConnect() {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--onboarding-ui-test", "--plan-not-eligible-fixture", "--proof-english"]
         app.launch()
-        let next = app.buttons["onboardingNext"]
-        XCTAssertTrue(next.waitForExistence(timeout: 10))
-        next.tap()
-        let height = app.textFields["onboardingHeight"]
-        XCTAssertTrue(height.waitForExistence(timeout: 5))
-        height.tap(); height.typeText("170")
-        app.buttons["keyboardNext"].tap(); app.typeText("80")
-        app.buttons["keyboardNext"].tap(); app.typeText("1990")
-        app.buttons["keyboardDone"].tap()
-        next.tap()
-        let target = app.textFields["onboardingTarget"]
-        XCTAssertTrue(target.waitForExistence(timeout: 5))
-        target.tap(); target.typeText("72")
-        app.buttons["keyboardDone"].tap()
-        next.tap() // goal, steady pace
-        next.tap() // diet
-        XCTAssertTrue(app.staticTexts["Estimate"].waitForExistence(timeout: 5), "Connect can never succeed for this account, so setup goes to the estimate")
-        XCTAssertFalse(app.buttons["onboardingSkipConnect"].exists)
-        next.tap()
+        let save = answerSetup(in: app)
+        XCTAssertFalse(app.buttons["onboardingTune"].exists, "Connect can never succeed for this account, so the estimate is all setup offers")
+        save.tap()
         XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 10), "Setup finishes without a ChatGPT connection")
     }
     func testPrecisionGlassReferenceScreensInBothAppearances() {

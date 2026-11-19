@@ -189,7 +189,14 @@ struct GoalEditorView: View {
                     Text("Leave a nutrient blank if you have no target for it.")
                         .font(.subheadline).foregroundStyle(Color.diarySecondary)
                 }
-                Section("Optional weight goal") { field(String(localized: "Weight (kg)"), text: $values.weight, id: "goalWeight") }
+                Section("Optional weight goal") {
+                    weightRuler(String(localized: "Weight (kg)"), text: $values.weight, unit: "kg", id: "goalWeight",
+                                placeholder: model.readModel?.weight.map { $0.unit == "lb" ? $0.value * 0.45359237 : $0.value } ?? 70, focus: $focusedField)
+                        .disabled(!goalLoaded)
+                    if !ProgressDate.validOptional(values.weight) {
+                        Text("Enter a positive number, or leave this blank.").font(.subheadline).foregroundStyle(.red)
+                    }
+                }
                 Section("Exercise") {
                     Toggle("Include estimated workout energy in an adjusted remaining figure", isOn: $values.exerciseCredit)
                         .disabled(!goalLoaded)
@@ -351,6 +358,7 @@ struct WeightCorrectionView: View {
     @State private var ownership: DiarySelectionOwnership?
     @State private var showDiscard = false
     @State private var saveError: String?
+    @FocusState private var focusedField: String?
     private var isDirty: Bool { value != String(entry.value) }
     private var valid: Bool { ProgressDate.number(value).map { $0.isFinite && $0 > 0 && $0 <= 1000 } == true }
 
@@ -365,7 +373,8 @@ struct WeightCorrectionView: View {
         NavigationStack {
             Form {
                 Section("Morning weight · \(localDate)") {
-                    progressNumberField(String(localized: "Weight in \(entry.shownUnit)"), text: $value, id: "weightCorrectionInput")
+                    weightRuler(String(localized: "Weight in \(entry.shownUnit)"), text: $value, unit: entry.unit, id: "weightCorrectionInput",
+                                placeholder: entry.value, focus: $focusedField)
                     if !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !valid {
                         Text("Enter a number greater than 0 and no more than 1,000 \(entry.shownUnit).")
                             .font(.subheadline).foregroundStyle(.red)
@@ -662,6 +671,16 @@ struct WorkoutEditorView: View {
     }
 }
 
+/// A weight typed or dragged on a ruler, under its visible name.
+@MainActor private func weightRuler(_ title: String, text: Binding<String>, unit: String, id: String, placeholder: Double,
+                                    focus: FocusState<String?>.Binding) -> some View {
+    VStack(alignment: .leading, spacing: 4) {
+        Text(title).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+        MeasureRuler(title: title, text: text, range: unit == "lb" ? 66...550 : 30...250, step: 0.1, unit: WeightEntry.shownUnit(unit),
+                     placeholder: (placeholder * 10).rounded() / 10, fieldID: id, focus: focus, field: id)
+    }
+}
+
 @MainActor private func dismissProgressKeyboard() {
     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
 }
@@ -669,6 +688,7 @@ struct WorkoutEditorView: View {
 struct MorningWeightEditorView: View {
     @Bindable var model: DiaryViewModel
     @Environment(\.dismiss) private var dismiss
+    @FocusState private var focusedField: String?
     @State private var value = ""
     @State private var saving = false
     @State private var showDiscard = false
@@ -709,7 +729,10 @@ struct MorningWeightEditorView: View {
             Form {
                 Section("Morning weight") {
                     if let localDate { LabeledContent("Waking day", value: localDate) }
-                    progressNumberField(String(localized: "Weight (\(shownUnit))"), text: $value, id: "weightInput").disabled(loading || !dayLoaded)
+                    weightRuler(String(localized: "Weight (\(shownUnit))"), text: $value, unit: unit, id: "weightInput",
+                                placeholder: model.readModel?.weight.map { $0.unit == unit ? $0.value : unit == "lb" ? $0.value / 0.45359237 : $0.value * 0.45359237 } ?? (unit == "lb" ? 154 : 70),
+                                focus: $focusedField)
+                        .disabled(loading || !dayLoaded)
                     if !value.isEmpty && !valid {
                         Label("Enter a weight greater than 0 and no more than 1,000 \(shownUnit).", systemImage: "exclamationmark.circle")
                             .font(.subheadline).foregroundStyle(.red)

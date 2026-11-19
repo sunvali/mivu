@@ -4619,29 +4619,6 @@
         }
       }
     },
-    "About you" : {
-      "comment" : "Onboarding heading: asks for sex, birth year, height and weight",
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "הפרטים שלך"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sobre ti"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "О тебе"
-          }
-        }
-      }
-    },
     "Account" : {
       "comment" : "Section heading in the ChatGPT connection test screen",
       "localizations" : {
@@ -4718,29 +4695,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Активные калории: %@ ккал"
-          }
-        }
-      }
-    },
-    "Add" : {
-      "comment" : "Button: adds an item (food, exercise or set)",
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "הוספה"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Agregar"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Добавить"
           }
         }
       }
@@ -8352,28 +8306,6 @@
         }
       }
     },
-    "ChatGPT tunes calories, protein, carbs and fat." : {
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ChatGPT מכוונן קלוריות, חלבון, פחמימות ושומן."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ChatGPT ajusta las calorías, proteínas, carbohidratos y grasas."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ChatGPT уточняет калории, белки, углеводы и жиры."
-          }
-        }
-      }
-    },
     "ChatGPT usage limit reached. Open Manage usage in Settings, then retry when usage is available." : {
       "comment" : "Shown from a stored value; the value itself stays English.",
       "extractionState" : "manual",
@@ -9360,28 +9292,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Подключить для анализа еды"
-          }
-        }
-      }
-    },
-    "Connect your ChatGPT account to turn your answers into personal targets." : {
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "צריך לחבר את חשבון ChatGPT כדי להפוך את התשובות ליעדים אישיים."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Conecta tu cuenta de ChatGPT para convertir tus respuestas en metas personales."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Подключи аккаунт ChatGPT, чтобы превратить ответы в личные нормы."
           }
         }
       }
@@ -12649,28 +12559,6 @@
         }
       }
     },
-    "Easiest to keep up" : {
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "הכי קל להתמיד"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lo más fácil de mantener"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Проще всего выдерживать"
-          }
-        }
-      }
-    },
     "Edit amount, nutrition or delete" : {
       "localizations" : {
         "he" : {
@@ -13506,28 +13394,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Если новая единица не связана со старой, введи каждое известное значение заново или очисти его."
-          }
-        }
-      }
-    },
-    "Enter your current weight to keep it." : {
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "צריך להזין את המשקל הנוכחי כדי לשמור אותו."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ingresa tu peso actual para conservarlo."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Введи текущий вес, чтобы сохранить."
           }
         }
       }
@@ -14736,29 +14602,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Из Siri с заблокированного экрана · ожидает: %lld"
-          }
-        }
-      }
-    },
-    "ft" : {
-      "comment" : "Unit: feet (height)",
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "רגל"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ft"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "фт"
           }
         }
       }
@@ -16899,28 +16742,6 @@
         }
       }
     },
-    "Let ChatGPT tune it" : {
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "לתת ל-ChatGPT לכוונן"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deja que ChatGPT lo ajuste"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Пусть ChatGPT уточнит"
-          }
-        }
-      }
-    },
     "Let's get started" : {
       "localizations" : {
         "he" : {
@@ -18765,28 +18586,6 @@
         }
       }
     },
-    "Mivu asks before sharing anything with OpenAI. Your diary stays on this iPhone." : {
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "לפני כל שיתוף עם OpenAI תופיע שאלה. היומן נשאר באייפון הזה."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mivu te pregunta antes de compartir algo con OpenAI. Tu diario se queda en este iPhone."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Прежде чем что-то передать в OpenAI, Mivu спросит тебя. Твой дневник остаётся на этом iPhone."
-          }
-        }
-      }
-    },
     "Mivu days %@.csv" : {
       "localizations" : {
         "he" : {
@@ -19635,29 +19434,6 @@
         }
       }
     },
-    "Next" : {
-      "comment" : "Button: next onboarding step",
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "הבא"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Siguiente"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Далее"
-          }
-        }
-      }
-    },
     "No account models loaded" : {
       "localizations" : {
         "en" : {
@@ -19682,28 +19458,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Модели аккаунта не загружены"
-          }
-        }
-      }
-    },
-    "No account, but much less accurate. It only logs meals and changes amounts." : {
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "בלי חשבון, אבל הדיוק נמוך בהרבה. אפשר רק לרשום ארוחות ולשנות כמויות."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sin cuenta, pero mucho menos preciso. Solo registra comidas y cambia cantidades."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Без аккаунта, но с гораздо меньшей точностью. Только записывает еду и меняет количество."
           }
         }
       }
@@ -22360,28 +22114,6 @@
         }
       }
     },
-    "Pick anything that applies. Coach keeps it in mind for every suggestion." : {
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "אפשר לבחור כל מה שרלוונטי. פיפ ייקח את זה בחשבון בכל הצעה."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Elige todo lo que corresponda. Coach lo tiene en cuenta en cada sugerencia."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Выбери всё, что подходит. Коуч учитывает это в каждом совете."
-          }
-        }
-      }
-    },
     "piece" : {
       "comment" : "Food unit after a quantity: one piece",
       "localizations" : {
@@ -23067,28 +22799,6 @@
         }
       }
     },
-    "Private by default" : {
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "פרטי כברירת מחדל"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Privado desde el inicio"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Приватно по умолчанию"
-          }
-        }
-      }
-    },
     "Private diary on this iPhone" : {
       "localizations" : {
         "he" : {
@@ -23681,28 +23391,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Подключить ChatGPT заново"
-          }
-        }
-      }
-    },
-    "Recommended. Works with your ChatGPT plan and uses its allowance. No extra cost." : {
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "מומלץ. עובד עם תוכנית ה-ChatGPT שלך ומשתמש במכסה שלה. בלי עלות נוספת."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recomendado. Funciona con tu plan de ChatGPT y usa lo que este incluye. Sin costo extra."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Рекомендуется. Работает с твоим тарифом ChatGPT и расходует его лимит. Без дополнительной платы."
           }
         }
       }
@@ -25288,28 +24976,6 @@
         }
       }
     },
-    "Right for most people" : {
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "מתאים לרוב האנשים"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ideal para la mayoría"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Подходит большинству"
-          }
-        }
-      }
-    },
     "Runs on this iPhone with no account, but estimates are much less accurate. It only logs meals and changes amounts; connect ChatGPT for accurate estimates, questions and other edits." : {
       "localizations" : {
         "he" : {
@@ -26827,51 +26493,6 @@
         }
       }
     },
-    "Sex" : {
-      "comment" : "Onboarding field label",
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "מין"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sexo"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Пол"
-          }
-        }
-      }
-    },
-    "Sex is optional. Skipping it uses the midpoint of both formulas." : {
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "אפשר לדלג על מין. אז החישוב משתמש בנקודת האמצע בין שתי הנוסחאות."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El sexo es opcional. Si lo omites, se usa el punto medio de ambas fórmulas."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Пол указывать необязательно. Если пропустить, берётся середина между обеими формулами."
-          }
-        }
-      }
-    },
     "Share a report" : {
       "localizations" : {
         "he" : {
@@ -28081,28 +27702,6 @@
         }
       }
     },
-    "Takes more discipline" : {
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "דורש יותר משמעת"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Requiere más disciplina"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Требует больше дисциплины"
-          }
-        }
-      }
-    },
     "Taking photo in %lld" : {
       "localizations" : {
         "he" : {
@@ -28263,29 +27862,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "норма %@ г"
-          }
-        }
-      }
-    },
-    "Target weight" : {
-      "comment" : "Label: goal body weight",
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "משקל יעד"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Peso objetivo"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Целевой вес"
           }
         }
       }
@@ -30806,28 +30382,6 @@
         }
       }
     },
-    "Use Apple Intelligence instead" : {
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "להשתמש ב-Apple Intelligence במקום"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Usar Apple Intelligence"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Использовать Apple Intelligence"
-          }
-        }
-      }
-    },
     "Use latest saved settings" : {
       "localizations" : {
         "he" : {
@@ -30850,28 +30404,6 @@
         }
       }
     },
-    "Use the estimate instead" : {
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "שימוש בהערכה במקום"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Usar la estimación"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Использовать оценку"
-          }
-        }
-      }
-    },
     "Use the Settings link to continue." : {
       "localizations" : {
         "he" : {
@@ -30890,28 +30422,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Продолжи по ссылке на Настройки."
-          }
-        }
-      }
-    },
-    "Used only to estimate your energy needs." : {
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "משמש רק להערכת צורכי האנרגיה שלך."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Se usa solo para estimar tus necesidades de energía."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Используется только для оценки твоей потребности в энергии."
           }
         }
       }
@@ -31221,28 +30731,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ожидание подтверждения подключения"
-          }
-        }
-      }
-    },
-    "Waiting for ChatGPT…" : {
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "בהמתנה ל-ChatGPT…"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Esperando a ChatGPT…"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ждём ChatGPT…"
           }
         }
       }
@@ -33531,29 +33019,6 @@
         }
       }
     },
-    "Your goal" : {
-      "comment" : "Label: the user's weight goal",
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "היעד שלך"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tu objetivo"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Твоя цель"
-          }
-        }
-      }
-    },
     "Your goals are updated." : {
       "localizations" : {
         "he" : {
@@ -33682,28 +33147,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Твоя заметка и фото на месте и не отправлены."
-          }
-        }
-      }
-    },
-    "Your own plan" : {
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "התוכנית האישית שלך"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tu propio plan"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Твой собственный тариф"
           }
         }
       }
@@ -33956,6 +33399,791 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Уменьшить"
+          }
+        }
+      }
+    },
+    "%@ kcal a day" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ קק״ל ליום"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ kcal al día"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ккал в день"
+          }
+        }
+      }
+    },
+    "%@ kcal a day · by %@" : {
+      "comment" : "Onboarding pace row: daily calories, then the month and year the goal is reached",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ קק״ל ליום · עד %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ kcal al día · para %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ккал в день · срок: %@"
+          }
+        }
+      }
+    },
+    "%@ to gain" : {
+      "comment" : "Goal weight caption: how much weight is left to gain",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ לעלייה"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ por subir"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "набрать %@"
+          }
+        }
+      }
+    },
+    "%@ to lose" : {
+      "comment" : "Goal weight caption: how much weight is left to lose",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ לירידה"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ por bajar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "сбросить %@"
+          }
+        }
+      }
+    },
+    "Based on your body and being %@, to keep your weight steady. Tap a number to change it." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לפי נתוני הגוף ורמת הפעילות (%@), כדי לשמור על משקל יציב. אפשר להקיש על מספר כדי לשנות אותו."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Según tu cuerpo y tu actividad (%@), para mantener tu peso estable. Toca un número para cambiarlo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "С учётом твоих данных и активности (%@), чтобы вес оставался стабильным. Нажми на число, чтобы изменить его."
+          }
+        }
+      }
+    },
+    "Based on your body and being %@. At this pace you'd reach your goal around %@. Tap a number to change it." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לפי נתוני הגוף ורמת הפעילות (%@). בקצב הזה היעד יושג בערך ב%@. אפשר להקיש על מספר כדי לשנות אותו."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Según tu cuerpo y tu actividad (%@). A este ritmo llegarías a tu meta hacia %@. Toca un número para cambiarlo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "С учётом твоих данных и активности (%@). В этом темпе цель будет достигнута примерно: %@. Нажми на число, чтобы изменить его."
+          }
+        }
+      }
+    },
+    "Based on your body and being %@. Tap a number to change it." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לפי נתוני הגוף ורמת הפעילות (%@). אפשר להקיש על מספר כדי לשנות אותו."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Según tu cuerpo y tu actividad (%@). Toca un número para cambiarlo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "С учётом твоих данных и активности (%@). Нажми на число, чтобы изменить его."
+          }
+        }
+      }
+    },
+    "Calories, protein, carbs and fat in seconds. ChatGPT can fine-tune them." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "קלוריות, חלבון, פחמימות ושומן תוך שניות. אפשר גם לכוונן אותם עם ChatGPT."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calorías, proteínas, carbohidratos y grasas en segundos. ChatGPT puede ajustarlas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Калории, белки, углеводы и жиры за секунды. ChatGPT может их уточнить."
+          }
+        }
+      }
+    },
+    "Day to day, you're…" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ביום-יום, רמת הפעילות…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En tu día a día…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В обычный день…"
+          }
+        }
+      }
+    },
+    "Diet and health" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "תזונה ובריאות"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieta y salud"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Питание и здоровье"
+          }
+        }
+      }
+    },
+    "Goal weight" : {
+      "comment" : "Accessibility name of the goal weight ruler",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "משקל יעד"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Peso objetivo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Целевой вес"
+          }
+        }
+      }
+    },
+    "Height unit" : {
+      "comment" : "Accessibility name of the cm or feet and inches switch",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "יחידת גובה"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unidad de estatura"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Единица роста"
+          }
+        }
+      }
+    },
+    "How active, and how fast?" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כמה פעילות, ובאיזה קצב?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Cuánta actividad y a qué ritmo?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Активность и темп"
+          }
+        }
+      }
+    },
+    "How tall are you?" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מה הגובה שלך?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Cuánto mides?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Какой у тебя рост?"
+          }
+        }
+      }
+    },
+    "Keep my weight" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שמירה על המשקל"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantener mi peso"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сохранить вес"
+          }
+        }
+      }
+    },
+    "Mivu will aim to keep your weight steady. Your doctor or midwife is the best guide for how much to eat right now." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "המטרה תהיה לשמור על משקל יציב. כמה לאכול עכשיו? הרופא או המיילדת הם המקור הטוב ביותר להנחיה."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu buscará mantener tu peso estable. Tu médico o matrona es la mejor guía sobre cuánto comer ahora."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu постарается сохранить твой вес стабильным. Сколько есть сейчас, лучше всего подскажет врач или акушерка."
+          }
+        }
+      }
+    },
+    "Mivu won't go below %@ kcal a day." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "היעד לא יירד מתחת ל-%@ קק״ל ליום."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu no bajará de %@ kcal al día."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu не опустится ниже %@ ккал в день."
+          }
+        }
+      }
+    },
+    "Mostly sitting" : {
+      "comment" : "Onboarding activity level option",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בעיקר בישיבה"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vida sedentaria"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В основном сидя"
+          }
+        }
+      }
+    },
+    "On my feet some" : {
+      "comment" : "Onboarding activity level option",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "קצת על הרגליים"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Algo de movimiento"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Иногда на ногах"
+          }
+        }
+      }
+    },
+    "Very active" : {
+      "comment" : "Onboarding activity level option",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הרבה פעילות"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mucha actividad"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Много движения"
+          }
+        }
+      }
+    },
+    "Optional. Helps estimate the energy you burn." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לא חובה. עוזר להעריך כמה אנרגיה נשרפת."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opcional. Ayuda a estimar la energía que gastas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Необязательно. Помогает оценить расход энергии."
+          }
+        }
+      }
+    },
+    "Prefer not to say uses the midpoint of both formulas." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "באפשרות „לא לציין\" נעשה שימוש בממוצע של שתי הנוסחאות."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "«Prefiero no decirlo» usa el punto medio de ambas fórmulas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "«Не указывать»: используется среднее двух формул."
+          }
+        }
+      }
+    },
+    "Right now" : {
+      "comment" : "Onboarding heading above the pregnancy or breastfeeding choice",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כרגע"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahora mismo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сейчас"
+          }
+        }
+      }
+    },
+    "Shares your answers with ChatGPT after you agree." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "התשובות ישותפו עם ChatGPT רק אחרי אישור."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comparte tus respuestas con ChatGPT cuando lo aceptes."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ответы передаются ChatGPT только после твоего согласия."
+          }
+        }
+      }
+    },
+    "Tune with ChatGPT" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כיוונון עם ChatGPT"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajustar con ChatGPT"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Уточнить с ChatGPT"
+          }
+        }
+      }
+    },
+    "Weight unit" : {
+      "comment" : "Accessibility name of the kg or lb switch",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "יחידת משקל"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unidad de peso"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Единица веса"
+          }
+        }
+      }
+    },
+    "What do you weigh?" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מה המשקל שלך?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Cuánto pesas?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сколько ты весишь?"
+          }
+        }
+      }
+    },
+    "What's your goal weight?" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מה משקל היעד?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Cuál es tu peso objetivo?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Какой у тебя целевой вес?"
+          }
+        }
+      }
+    },
+    "When were you born?" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מה שנת הלידה?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿En qué año naciste?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Твой год рождения?"
+          }
+        }
+      }
+    },
+    "Your age changes how much energy you burn." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הגיל משפיע על כמות האנרגיה שנשרפת."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu edad cambia cuánta energía gastas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Возраст влияет на расход энергии."
+          }
+        }
+      }
+    },
+    "Your sex" : {
+      "comment" : "Onboarding question title",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מין"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu sexo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Твой пол"
+          }
+        }
+      }
+    },
+    "mostly sitting" : {
+      "comment" : "Activity level inside a sentence: Based on your body and being …",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בעיקר בישיבה"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vida sedentaria"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "в основном сидя"
+          }
+        }
+      }
+    },
+    "on your feet some" : {
+      "comment" : "Activity level inside a sentence: Based on your body and being …",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "קצת על הרגליים"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "algo de movimiento"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "иногда на ногах"
+          }
+        }
+      }
+    },
+    "very active" : {
+      "comment" : "Activity level inside a sentence: Based on your body and being …",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הרבה פעילות"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mucha actividad"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "много движения"
+          }
+        }
+      }
+    },
+    "Pregnant or breastfeeding" : {
+      "comment" : "Onboarding diet tag chip; the English tag is stored and sent to the model",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הריון או הנקה"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Embarazo o lactancia"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Беременность или кормление грудью"
           }
         }
       }
