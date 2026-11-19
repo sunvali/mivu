@@ -508,8 +508,10 @@ struct CoachView: View {
                 companionStrip
                 // One tray holds the quick prompts and the field, so the shortcuts read as part of the input.
                 VStack(alignment: .leading, spacing: 8) {
-                    if showsQuickPromptRow { quickPromptRow }
+                    if showsQuickPromptRow && !suggestionsCollapsed { quickPromptRow }
                     HStack(alignment: .bottom, spacing: 8) {
+                        // Collapsed, the arrow sits beside the field so the tray shrinks to the field alone.
+                        if showsQuickPromptRow && suggestionsCollapsed { suggestionsToggle.transition(.opacity) }
                         composerInput
                         // One round action: the mic while the draft is empty, Send once there is something to send.
                         Group { if showsSend { send } else { voiceAction } }.transition(.opacity)
@@ -644,47 +646,46 @@ struct CoachView: View {
     }
     private var quickPromptRow: some View {
         HStack(spacing: 4) {
-            if suggestionsCollapsed {
-                Spacer(minLength: 0)
-            } else {
-                ScrollView(.horizontal) {
-                    HStack(spacing: 8) {
-                        ForEach(Array(quickPrompts.enumerated()), id: \.element.id) { index, prompt in
-                            quickPromptChip(prompt)
-                                // A chip that would peek as a sliver (a stray glyph) stays out of sight until scrolled in.
-                                .visualEffect { content, proxy in
-                                    let shown = proxy.bounds(of: .scrollView(axis: .horizontal))
-                                        .map { $0.intersection(CGRect(origin: .zero, size: proxy.size)).width } ?? proxy.size.width
-                                    return content.opacity(shown >= min(48, proxy.size.width - 1) ? 1 : 0)
-                                }
-                                .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 6)))
-                                .animation(reduceMotion ? .easeOut(duration: 0.15) : .snappy(duration: 0.22).delay(Double(index) * 0.03), value: prompt.id)
-                        }
-                    }
-                    .scrollTargetLayout()
-                }
-                .scrollTargetBehavior(.viewAligned).scrollIndicators(.hidden)
-                // Only a row with more to scroll fades at its end, so it reads as more; chips that fit stay whole.
-                .onScrollGeometryChange(for: Bool.self) { $0.contentSize.width > $0.containerSize.width + $0.contentOffset.x + 1 } action: { _, more in promptsOverflow = more }
-                .mask {
-                    HStack(spacing: 0) {
-                        Color.black
-                        if promptsOverflow { LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 24) }
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(Array(quickPrompts.enumerated()), id: \.element.id) { index, prompt in
+                        quickPromptChip(prompt)
+                            // A chip that would peek as a sliver (a stray glyph) stays out of sight until scrolled in.
+                            .visualEffect { content, proxy in
+                                let shown = proxy.bounds(of: .scrollView(axis: .horizontal))
+                                    .map { $0.intersection(CGRect(origin: .zero, size: proxy.size)).width } ?? proxy.size.width
+                                return content.opacity(shown >= min(48, proxy.size.width - 1) ? 1 : 0)
+                            }
+                            .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 6)))
+                            .animation(reduceMotion ? .easeOut(duration: 0.15) : .snappy(duration: 0.22).delay(Double(index) * 0.03), value: prompt.id)
                     }
                 }
-                .accessibilityElement(children: .contain).accessibilityIdentifier("coachQuickPrompts")
+                .scrollTargetLayout()
             }
-            Button { suggestionsCollapsed.toggle() } label: {
-                // A bare glyph, so it reads as a control rather than another chip; the tap area reaches 44 points.
-                Image(systemName: "chevron.down").font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.diarySecondary)
-                    .rotationEffect(.degrees(suggestionsCollapsed && !reduceMotion ? 180 : 0))
-                    .frame(width: 32, height: 44).contentShape(.rect.inset(by: -6))
+            .scrollTargetBehavior(.viewAligned).scrollIndicators(.hidden)
+            // Only a row with more to scroll fades at its end, so it reads as more; chips that fit stay whole.
+            .onScrollGeometryChange(for: Bool.self) { $0.contentSize.width > $0.containerSize.width + $0.contentOffset.x + 1 } action: { _, more in promptsOverflow = more }
+            .mask {
+                HStack(spacing: 0) {
+                    Color.black
+                    if promptsOverflow { LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 24) }
+                }
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(suggestionsCollapsed ? String(localized: "Show suggestions") : String(localized: "Hide suggestions"))
-            .accessibilityIdentifier(suggestionsCollapsed ? "coachQuickPromptsExpand" : "coachQuickPromptsCollapse")
+            .accessibilityElement(children: .contain).accessibilityIdentifier("coachQuickPrompts")
+            suggestionsToggle
         }
         .padding(.bottom, -4).transition(.opacity)
+    }
+    private var suggestionsToggle: some View {
+        Button { suggestionsCollapsed.toggle() } label: {
+            // A bare glyph, so it reads as a control rather than another chip; the tap area reaches 44 points.
+            Image(systemName: suggestionsCollapsed ? "chevron.up" : "chevron.down").font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.diarySecondary)
+                .frame(width: 32, height: 44).contentShape(.rect.inset(by: -6))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(suggestionsCollapsed ? String(localized: "Show suggestions") : String(localized: "Hide suggestions"))
+        .accessibilityIdentifier(suggestionsCollapsed ? "coachQuickPromptsExpand" : "coachQuickPromptsCollapse")
     }
     private func quickPromptChip(_ prompt: QuickPrompt) -> some View {
         Button { use(prompt) } label: {
