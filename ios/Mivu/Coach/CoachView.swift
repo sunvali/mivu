@@ -21,6 +21,7 @@ struct CoachView: View {
     @State private var surfaceVisible = false
     @State private var showingDetail = false
     @State private var showPhotos = false
+    @State private var reportContext: FeedbackContext?
     @State private var sentWithPhotos = false
     @State private var composerHeight: CGFloat = 0
     @State private var textWidth: CGFloat = 0
@@ -162,6 +163,12 @@ struct CoachView: View {
             }
             .onAppear { showingDetail = true; reportCompanionContext() }
             .onDisappear { showingDetail = false; reportCompanionContext() }
+        }
+        .sheet(item: $reportContext) { context in
+            NavigationStack {
+                FeedbackView(kind: .bug, context: context)
+                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { reportContext = nil } } }
+            }
         }
         .fullScreenCover(isPresented: $showPhotos, onDismiss: {
             if let id = cameraPresentationID { Task { try? await coach.attachmentDraft.endPresentation(id) } }
@@ -439,6 +446,7 @@ struct CoachView: View {
                 if let detail { Text(detail).font(.footnote).foregroundStyle(Color.diarySecondary) }
                 if canRetry, let turn = coach.companionTurn {
                     Button("Try again") { Task { await coach.retry(turn.id) } }.modifier(BubbleAction()).disabled(coach.isWorking)
+                    if turn.state == .needsRetry { reportProblem(turn.state).modifier(BubbleAction()) }
                 }
             case .connect where coach.connection.planNotEligible:
                 Text("Your ChatGPT plan can’t be used in other apps.")
@@ -975,6 +983,7 @@ struct CoachView: View {
                     Button("Log to \(CoachReplyLines.shortDate(coach.captureDate(turn)))") { Task { await coach.chooseDay(turn.id, usePrevious: false) } }.frame(minHeight: 44).disabled(coach.isWorking)
                 } else if [.waitingForConnection, .waitingForNetwork, .needsRetry, .needsClarification].contains(turn.state) {
                     Button("Try again") { Task { await coach.retry(turn.id) } }.frame(minHeight: 44).disabled(coach.isWorking).accessibilityIdentifier("coachRetry")
+                    if turn.state == .needsRetry { reportProblem(turn.state).frame(minHeight: 44) }
                 }
             }
             ForEach(turn.receipts.filter(CoachReceiptPresentation.showsCard), id: \.operationKey) { receipt in
@@ -1056,6 +1065,10 @@ struct CoachView: View {
                 .accessibilityIdentifier("coachSettingsLink")
             }
         }
+    }
+    /// Only after a failure Mivu could not recover from; waiting for network or sign-in is not a bug to report.
+    private func reportProblem(_ state: CoachTurnState) -> some View {
+        Button("Report this problem") { reportContext = FeedbackContext(state) }.accessibilityIdentifier("coachReportProblem")
     }
     private func status(_ state: CoachTurnState) -> String {
         switch state {

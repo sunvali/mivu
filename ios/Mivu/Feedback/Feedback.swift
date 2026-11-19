@@ -12,7 +12,8 @@ enum FeedbackKind: String, Codable, CaseIterable, Sendable {
 }
 
 /// A closed set of codes, so a report never carries raw error text or diary content.
-enum FeedbackContext: String, Codable, Sendable {
+enum FeedbackContext: String, Codable, Sendable, Identifiable {
+    var id: String { rawValue }
     case coachNetwork = "coach_network", coachSession = "coach_session", coachOther = "coach_other"
     init(_ state: CoachTurnState) {
         switch state {

@@ -91,6 +91,10 @@ private final class FeedbackStub: URLProtocol, @unchecked Sendable {
         #expect(FeedbackContext(.waitingForConnection) == .coachSession)
         #expect(FeedbackContext(.needsRetry) == .coachOther)
     }
+    @Test func coachRulesPointToTheFormAndNeverClaimSending() {
+        #expect(CoachEngine.stableRules.contains("tap Send feedback under Support"))
+        #expect(CoachEngine.stableRules.contains("never say one was sent"))
+    }
     @Test func sendPostsJSONAndAccepts204() async throws {
         try await Feedback.send(full, to: endpoint, session: FeedbackStub.session())
         #expect(FeedbackStub.request?.httpMethod == "POST")
