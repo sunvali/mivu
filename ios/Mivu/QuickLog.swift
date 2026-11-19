@@ -47,6 +47,7 @@ final class MivuAppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UN
         // Set before launch finishes so a tap that cold-launches the app is still delivered.
         UNUserNotificationCenter.current().delegate = self
         MorningReminder.refresh()
+        SnapItTip.start()
         // HealthKit background delivery needs its observer registered at launch, before any screen appears.
         if HealthWorkoutSync.anyConnected(DiaryLaunch.defaults) { Task { await MivuServices.shared.startHealth() } }
         return true

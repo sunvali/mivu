@@ -1,4 +1,5 @@
 import SwiftUI
+import TipKit
 import Observation
 import StoreKit
 
@@ -235,7 +236,7 @@ struct DiaryRootView: View {
         .onChange(of: connection.selectedModel) { _, _ in coach.cancel(); Task { await coach.waitForWorker(); coach.resume() } }
         .onChange(of: phase) { _, value in
             // iOS ends a Live Activity after about eight hours; each return to Mivu starts a fresh one.
-            if value == .active { syncDayProgressActivity(model.readModel); if hasLoaded { Task { await services.startHealth() } } }
+            if value == .active { syncDayProgressActivity(model.readModel); if hasLoaded { Task { await services.startHealth() } }; Task { await SnapItTip.refreshControlAdded() } }
             if value != .active {
                 companionRuntime.stop()
                 if value == .background {
@@ -393,7 +394,8 @@ struct DiaryRootView: View {
                 .task(id: loggedMealID) {
                     guard loggedMealID != nil else { return }
                     try? await Task.sleep(for: .seconds(UIAccessibility.isVoiceOverRunning ? 10 : 5))
-                    if !Task.isCancelled { withAnimation { loggedMealID = nil } }
+                    // Counted only once the toast has gone, so the tip never covers Add Note.
+                    if !Task.isCancelled { withAnimation { loggedMealID = nil }; SnapItTip.logged.sendDonation() }
                 }
             }
             Tab("Diary", systemImage: "text.document", value: "diary") {
@@ -685,6 +687,8 @@ struct TodayView: View {
     @State private var showComposer = false
     @State private var showWeight = false
     @State private var showGoals = false
+    @State private var showSnapItShortcuts = false
+    private let snapItTip = SnapItTip()
     @State private var savedMealID: UUID?
     @State private var choosingZone = false
     @AppStorage("morningCardDismissedDay") private var dismissedMorningDay = ""
@@ -816,6 +820,9 @@ struct TodayView: View {
         .safeAreaInset(edge: .bottom) {
             if model.readModel != nil, !isLiveDay {
                 VStack(spacing: 8) {
+                    // Inline, not a popover: a popover still closing left Today deaf to taps once the steps sheet was dismissed.
+                    TipView(snapItTip, arrowEdge: .bottom) { _ in snapItTip.invalidate(reason: .actionPerformed); showSnapItShortcuts = true }
+                        .tipBackground(Color.diarySurface).tipViewStyle(SnapItTipStyle())
                     // Reuses the Shortcuts camera; disabled when it couldn't open now, so a tap never fires later.
                     DiaryCaptureAction { QuickLogRequest.shared.pending = true }
                         .disabled(model.selection == nil || model.isChangingProfile)
@@ -857,6 +864,7 @@ struct TodayView: View {
         .onChange(of: model.readModel?.profile.id) { _, _ in savedMealID = nil }
         .sheet(isPresented: $showWeight) { MorningWeightEditorView(model: model) }
         .sheet(isPresented: $showGoals) { GoalEditorView(model: model) }
+        .sheet(isPresented: $showSnapItShortcuts) { SnapItShortcutsView() }
         .onAppear { surfaceVisible = true; reportCompanionContext() }
         .onDisappear { surfaceVisible = false; reportCompanionContext() }
         .onChange(of: [companionVisible, showComposer, showManualNutrition, showWeight, showGoals, showingDetail]) { _, _ in reportCompanionContext() }

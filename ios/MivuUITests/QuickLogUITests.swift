@@ -80,4 +80,55 @@ import XCTest
         let selected = NSPredicate(format: "isSelected == true")
         XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: selected, object: coach)], timeout: 10), .completed)
     }
+
+    func testSnapItTipAppearsAfterFirstLogAndOpensShortcutSteps() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--proof-english", "--snap-it-tip"]
+        app.launch()
+        let how = app.buttons["Show me how"], snapIt = app.buttons["snapIt"], toast = app.buttons["quickLogAddNote"]
+        XCTAssertTrue(snapIt.waitForExistence(timeout: 15))
+        XCTAssertFalse(how.exists, "No tip before the first photo log")
+        snapIt.tap()
+        let photo = app.buttons["quickLogSyntheticPhoto"]
+        XCTAssertTrue(photo.waitForExistence(timeout: 10))
+        photo.tap()
+        XCTAssertTrue(toast.waitForExistence(timeout: 10))
+        XCTAssertFalse(how.exists, "The tip waits for the toast, so it never covers Add Note")
+        XCTAssertTrue(toast.waitForNonExistence(timeout: 10))
+        XCTAssertTrue(how.waitForExistence(timeout: 5), "The tip points at Snap It after the first log")
+        XCTAssertTrue(app.staticTexts["Add Snap It to your Lock Screen, Control Center or Action button."].exists)
+        how.tap()
+        XCTAssertTrue(app.buttons["snapItVideo"].waitForExistence(timeout: 5), "The steps open with a video")
+        app.buttons["doneSnapItShortcuts"].tap()
+        XCTAssertFalse(how.waitForExistence(timeout: 2), "The tip is gone once its steps were opened")
+        XCTAssertTrue(snapIt.isHittable)
+    }
+
+    func testSnapItShortcutsFromSettingsShowVideoAndStepsForEachPlace() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--proof-english"]
+        app.launch()
+        XCTAssertTrue(app.buttons["profileSettings"].waitForExistence(timeout: 15))
+        app.buttons["profileSettings"].tap()
+        let row = app.buttons["snapItShortcuts"]
+        // Settings is a lazy list; the Setup rows start below the fold.
+        if !row.waitForExistence(timeout: 3) { app.swipeUp() }
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.tap()
+        let video = app.buttons["snapItVideo"]
+        XCTAssertTrue(video.waitForExistence(timeout: 5))
+        XCTAssertEqual(video.value as? String, "Playing")
+        video.tap()
+        XCTAssertEqual(video.value as? String, "Paused", "A tap pauses the video")
+        for (place, step) in [("Control Center", "Swipe down from the top-right corner."),
+                              ("Action button", "Open Settings and tap Action Button."),
+                              ("Lock Screen", "Remove one of the bottom buttons, then tap +.")] {
+            app.segmentedControls["snapItPlace"].buttons[place].tap()
+            if !app.staticTexts[step].waitForExistence(timeout: 2) { app.swipeUp() }
+            XCTAssertTrue(app.staticTexts[step].waitForExistence(timeout: 5), "\(place) steps are listed")
+            app.swipeDown()
+        }
+        app.buttons["doneSnapItShortcuts"].tap()
+        XCTAssertTrue(app.buttons["doneSettings"].waitForExistence(timeout: 5))
+    }
 }

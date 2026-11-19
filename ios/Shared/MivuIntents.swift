@@ -5,6 +5,7 @@ struct LogFoodIntent: AppIntent {
     static let title: LocalizedStringResource = "Snap It"
     static let description = IntentDescription("Opens the camera to photograph a meal and log it.")
     static let openAppWhenRun = true
+    static let controlKind = "com.yakov103.mivu.log-food-control"
 
     @MainActor func perform() async throws -> some IntentResult {
         #if !WIDGET_EXTENSION

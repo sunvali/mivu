@@ -19,6 +19,7 @@ struct SettingsView: View {
     @State private var showConnectionDiagnostic = false
     @State private var showGoals = false
     @State private var showPipStickers = false
+    @State private var showSnapItShortcuts = false
     @State private var showOnboarding = false
     @State private var fields = DiaryPreferencesDraft()
     @State private var linkedSection: SettingsSection?
@@ -52,6 +53,8 @@ struct SettingsView: View {
                         .accessibilityIdentifier("editGoals")
                     Button { showOnboarding = true } label: { settingsRow(String(localized: "Redo setup with Pip"), symbol: "pawprint", color: .diaryProtein) }
                         .accessibilityIdentifier("redoOnboarding")
+                    Button { showSnapItShortcuts = true } label: { settingsRow(String(localized: "Snap It shortcuts"), symbol: "camera.fill", color: .diaryAccent) }
+                        .accessibilityIdentifier("snapItShortcuts")
                     NavigationLink(value: SettingsSection.preferences) { settingsRow(String(localized: "Diary preferences"), symbol: "list.bullet.rectangle", color: .diaryCarbs) }
                         .accessibilityIdentifier("diaryPreferences")
                     NavigationLink(value: SettingsSection.backup) { settingsRow(String(localized: "Backup & export"), symbol: "square.and.arrow.up", color: .diaryProtein) }
@@ -109,6 +112,7 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showGoals) { GoalEditorView(model: model) }
         .sheet(isPresented: $showPipStickers) { PipStickerSheet() }
+        .sheet(isPresented: $showSnapItShortcuts) { SnapItShortcutsView() }
         .fullScreenCover(isPresented: $showOnboarding) { OnboardingView(model: model, connection: connection) { showOnboarding = false } }
         .onChange(of: model.readModel?.profile, initial: true) { _, profile in fields.synchronize(profile, restoreGeneration: model.restoreGeneration) }
         .onChange(of: model.restoreGeneration) { _, _ in fields.synchronize(model.readModel?.profile, restoreGeneration: model.restoreGeneration) }
