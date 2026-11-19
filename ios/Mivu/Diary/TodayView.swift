@@ -722,7 +722,7 @@ struct TodayView: View {
                 if model.todaysMeals.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Label("Your first meal starts here", systemImage: "fork.knife").font(.headline)
-                        Text("Add photos or a note.").foregroundStyle(Color.diarySecondary)
+                        Text("Snap a photo, or chat with Pip to describe it.").foregroundStyle(Color.diarySecondary)
                     }.diarySummaryCard()
                 }
                 ForEach(model.todaysMeals, id: \.id) { meal in
@@ -793,15 +793,24 @@ struct TodayView: View {
         }
         .safeAreaInset(edge: .bottom) {
             if model.readModel != nil, !isLiveDay {
-                (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))) {
-                    if model.sampleMode { DiaryCaptureAction(title: "Log meal", systemImage: "plus.circle.fill") { showComposer = true } }
-                    else { // shortcut: sample mode keeps MealComposerView because Coach has no sample analyzer, delete when sample mode goes or Coach gains one
-                        DiaryCaptureAction {
-                            if let selection = model.selection { openChat(nil, expectedSelection: selection) }
-                        }
+                VStack(spacing: 8) {
+                    // Reuses the Shortcuts camera; disabled when it couldn't open now, so a tap never fires later.
+                    DiaryCaptureAction { QuickLogRequest.shared.pending = true }
                         .disabled(model.selection == nil || model.isChangingProfile)
-                        DiaryManualAction(identifier: "addManually") { showManualNutrition = true }
+                    let secondary = HStack(spacing: 8) {
+                        if model.sampleMode { DiaryManualAction(title: "Log meal", systemImage: "plus.circle.fill", identifier: "logMeal") { showComposer = true } }
+                        else { // shortcut: sample mode keeps MealComposerView because Coach has no sample analyzer, delete when sample mode goes or Coach gains one
+                            DiaryManualAction(title: "Chat with Pip", systemImage: "bubble.left.fill", identifier: "logMeal") {
+                                if let selection = model.selection { openChat(nil, expectedSelection: selection) }
+                            }
+                            .disabled(model.selection == nil || model.isChangingProfile)
+                            .accessibilityHint("Opens a chat where you can add photos and notes.")
+                            DiaryManualAction(identifier: "addManually") { showManualNutrition = true }
+                                .accessibilityHint("Opens a form to type in nutrition.")
+                        }
                     }
+                    // Labelled, three stacked buttons fill half the screen at accessibility sizes; icons keep one row and still speak their titles.
+                    if typeSize.isAccessibilitySize { secondary.labelStyle(.iconOnly) } else { secondary }
                 }
                 // Sideways the bar would span the whole display; keep the buttons phone-sized.
                 .frame(maxWidth: isWide ? 560 : .infinity)
