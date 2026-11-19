@@ -573,6 +573,8 @@ struct CoachView: View {
                 // Stacked, not overlaid, so the field grows to fit the words plus the wave while listening.
                 ZStack(alignment: .topLeading) {
                     // `placeholder` draws the prompt: the field's own keeps to one line and cuts longer translations at large text.
+                    // Behind the field, so the field keeps its own touches (long-press Paste) and only a wrapped line below it falls through.
+                    if !listening && coach.attachmentDraft.text.isEmpty { placeholder }
                     TextField("Describe a meal…", text: Binding(get: { coach.attachmentDraft.text }, set: { coach.attachmentDraft.text = $0 }),
                               prompt: Text(""), axis: .vertical)
                         // Grows to four lines (three at accessibility sizes), then scrolls inside the field.
@@ -582,7 +584,7 @@ struct CoachView: View {
                         .padding(.leading, 16).padding(.vertical, 10)
                         // Hide only the text while listening; a transparent field would stop receiving the tap that switches to typing.
                         .foregroundStyle(listening ? Color.clear : Color.primary)
-                    if listening { listeningText } else if coach.attachmentDraft.text.isEmpty { placeholder }
+                    if listening { listeningText }
                 }
                 .frame(minHeight: 48)
                 camera.padding(.trailing, 2).padding(.bottom, 2)
@@ -759,7 +761,7 @@ struct CoachView: View {
         Text("Describe a meal…").foregroundStyle(Color(uiColor: .placeholderText))
             .lineLimit(typeSize.isAccessibilitySize ? 3 : 4)
             .padding(.leading, 16).padding(.vertical, 10)
-            // A wrapped prompt reaches below the one-line field, so its own taps start typing too.
+            // A wrapped prompt reaches below the one-line field, so taps there start typing too.
             .contentShape(.rect).onTapGesture { editing = true }.accessibilityHidden(true)
     }
     /// While listening, the words stream in with a three-line sound wave as their cursor.
