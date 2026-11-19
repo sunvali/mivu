@@ -475,6 +475,10 @@ actor DiaryStore {
         return try pagedConnection(expectedProfileID: expectedProfileID).database.coachFindMeals(query: query, from: from, to: to, expectedProfileID: expectedProfileID)
     }
 
+    func recentMeals(from: String, to: String, expectedProfileID: UUID) throws -> [RecentMeal] {
+        return try pagedConnection(expectedProfileID: expectedProfileID).database.recentMeals(from: from, to: to, expectedProfileID: expectedProfileID)
+    }
+
     func coachContext(turnID: UUID, expectedProfileID: UUID) throws -> CoachContext {
         return try pagedConnection(expectedProfileID: expectedProfileID).database.coachInferenceContext(turnID: turnID, expectedProfileID: expectedProfileID)
     }

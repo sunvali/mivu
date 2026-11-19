@@ -23,6 +23,39 @@ import XCTest
         XCTAssertTrue(app.buttons["mealRow"].firstMatch.waitForExistence(timeout: 10))
     }
 
+    func testSnapItOnTodayIsVisibleAtLaunchAndOpensCamera() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--proof-english"]
+        app.launch()
+        let snapIt = app.buttons["snapIt"]
+        XCTAssertTrue(snapIt.waitForExistence(timeout: 15))
+        XCTAssertTrue(snapIt.isHittable, "Snap It is on screen as soon as Today opens")
+        XCTAssertGreaterThanOrEqual(snapIt.frame.height, 44)
+        XCTAssertTrue(snapIt.label.contains("Instant photo log"), "The caption separates Snap It from chatting with Pip")
+        XCTAssertLessThan(snapIt.frame.maxY, app.buttons["logMeal"].frame.minY, "Snap It leads the capture bar")
+        snapIt.tap()
+        let photo = app.buttons["quickLogSyntheticPhoto"]
+        XCTAssertTrue(photo.waitForExistence(timeout: 10))
+        photo.tap()
+        XCTAssertTrue(app.buttons["quickLogAddNote"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["mealRow"].firstMatch.waitForExistence(timeout: 10))
+    }
+
+    func testLargestTextPairsPipAndManualAsIconsUnderSnapIt() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-navigation-start-today",
+                               "--proof-english", "--proof-largest-text"]
+        app.launch()
+        let snapIt = app.buttons["snapIt"], pip = app.buttons["logMeal"], manual = app.buttons["addManually"]
+        XCTAssertTrue(snapIt.waitForExistence(timeout: 15))
+        XCTAssertTrue(snapIt.isHittable)
+        XCTAssertEqual(pip.frame.midY, manual.frame.midY, accuracy: 2, "Icons share one row so the bar leaves room for the day")
+        XCTAssertLessThan(snapIt.frame.maxY, pip.frame.minY)
+        XCTAssertEqual(pip.label, "Chat with Pip")
+        XCTAssertEqual(manual.label, "Add manually")
+        XCTAssertGreaterThanOrEqual(manual.frame.height, 44)
+    }
+
     func testCameraRequestWaitsForTheDiaryChooser() {
         let id = UUID().uuidString, app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", id, "--proof-english"]

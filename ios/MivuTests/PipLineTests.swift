@@ -4,9 +4,20 @@ import Testing
 struct PipLineTests {
     private func line(hour: Int = 12, mealsLogged: Bool = false, typing: Bool = false, connected: Bool = true,
                       processing: Bool = false, withPhotos: Bool = false, recovery: Bool = false,
-                      error: String? = nil, turnState: CoachTurnState? = nil) -> PipLine? {
+                      error: String? = nil, turnState: CoachTurnState? = nil, chips: Bool = false) -> PipLine? {
         PipLine.current(hour: hour, mealsLogged: mealsLogged, typing: typing, connected: connected, processing: processing,
-                        withPhotos: withPhotos, recovery: recovery, error: error, turnState: turnState)
+                        withPhotos: withPhotos, recovery: recovery, error: error, turnState: turnState, chips: chips)
+    }
+
+    @Test func chipsShortenOnlyTheIdleLine() {
+        #expect(line(hour: 8, chips: true) == .say("Morning!"))
+        #expect(line(hour: 12, chips: true) == .say("Lunch time?"))
+        #expect(line(hour: 16, chips: true) == .say("Snack time?"))
+        #expect(line(hour: 19, chips: true) == .say("Dinner time?"))
+        #expect(line(hour: 2, chips: true) == .say("Hi again!"))
+        #expect(line(hour: 8, mealsLogged: true, chips: true) == .say("Anything else?"))
+        #expect(line(processing: true, chips: true) == .working("Counting that up…"))
+        #expect(line(connected: false, chips: true) == .connect)
     }
 
     @Test func idleFollowsTheTimeOfDayUntilSomethingIsLogged() {

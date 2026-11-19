@@ -690,6 +690,18 @@ private final class CoachNavigationReadFence: Sendable {
         var assistantText: String?
     }
     private(set) var historyFixtureLatest: FixtureReplyStatus?
+    /// Saved meals from yesterday back 14 days, for the quick-prompt re-log chip.
+    private(set) var recentMeals: [RecentMeal] = []
+    func refreshRecentMeals() async {
+        guard let token = diary.selection, let model = diary.readModel else { recentMeals = []; return }
+        let today = model.activeDay?.localDate ?? ProgressAnalytics.dateLabel(.now, zone: model.profile.timeZoneID)
+        let days = ProgressAnalytics.window(endingOn: today, days: 14, offset: 1, zone: model.profile.timeZoneID)
+        guard let from = days.first, let to = days.last else { recentMeals = []; return }
+        // A failed read only costs the re-log chip; the other chips don't need history.
+        let meals = (try? await diary.store.recentMeals(from: from, to: to, expectedProfileID: token.identity.profileID)) ?? []
+        guard diary.selection == token, !Task.isCancelled else { return }
+        recentMeals = meals
+    }
     func refreshLinks() async {
         await refreshActiveOperation()
         await refreshHistoryFixtureFacts()

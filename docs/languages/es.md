@@ -61,6 +61,7 @@ speaker has read it yet.
 | weights (records, in lists) | registros de peso; file name: pesajes | Never «pesos», which reads as money |
 | nut allergy, nuts | frutos secos | «nueces» means walnuts only in much of Latin America |
 | plan allowance | lo que incluye el plan | Not «cupo», which reads as a credit limit or seats |
+| snack | snack | As US and Mexican apps write it; «merienda», «colación» and «botana» are regional |
 | workout | entrenamiento | |
 | streak | racha | |
 | check-in | repaso del día | |

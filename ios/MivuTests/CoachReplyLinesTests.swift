@@ -66,16 +66,17 @@ import Testing
         #expect(String(CoachReplyLines.attributed("About **1,240** kcal").characters) == "About 1,240 kcal")
     }
 
-    @Test func followUpsFollowTheCompletedTurnsReceipts() {
+    @Test func followUpsOnlyOpenPastDaysTheReplyRead() {
         func turn(_ receipts: [CoachCommittedReceipt], state: CoachTurnState = .completed) -> CoachExchangeSummary {
             CoachExchangeSummary(id: UUID(), sequence: 1, capturedAt: now, captureTimeZoneID: "UTC", segmentID: UUID(), displayLocalDate: "2027-01-15",
                 displayTimeZoneID: "UTC", text: "Synthetic", state: state, photos: [], receipts: receipts)
         }
         let meal = CoachCommittedReceipt(operationKey: "m", turnID: UUID(), mealID: UUID(), committedRevision: 1, submissionState: .saved)
         let weight = CoachCommittedReceipt(operationKey: "w", turnID: UUID(), weightID: UUID(), committedRevision: 1)
-        #expect(CoachReplyLines.followUps(for: turn([meal])) == [.today])
-        #expect(CoachReplyLines.followUps(for: turn([weight])) == [.progress])
-        #expect(CoachReplyLines.followUps(for: turn([meal, weight])) == [.today, .progress])
+        // Quick prompts cover today and progress, so only a past day the reply read gets a button.
+        #expect(CoachReplyLines.followUps(for: turn([meal, weight])) == [])
+        #expect(CoachReplyLines.followUps(for: turn([meal]), consulted: [.progress, .day("2027-01-15"), .day("2027-01-10")], today: "2027-01-15") == [.day("2027-01-10")])
+        #expect(CoachReplyLines.followUps(for: turn([meal]), consulted: [.day("2027-01-10")], today: "2027-01-15") == [.day("2027-01-10")])
         #expect(CoachReplyLines.followUps(for: turn([meal], state: .analyzing)) == [])
         #expect(CoachReplyLines.followUps(for: turn([])) == [])
     }

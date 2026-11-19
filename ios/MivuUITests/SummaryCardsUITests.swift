@@ -50,7 +50,10 @@ import XCTest
                 "The smaller nutrient caption must not wrap into two lines")
             XCTAssertLessThan(protein.frame.maxX, carbs.frame.minX)
             XCTAssertLessThan(carbs.frame.maxX, fat.frame.minX)
-            XCTAssertLessThanOrEqual(fat.frame.maxY, logMeal.frame.minY)
+            // Sample mode's banner and the after-midnight move prompt push the macros under the Snap It bar; they must scroll clear.
+            let bar = app.buttons["snapIt"]
+            for _ in 0..<3 where fat.frame.maxY > bar.frame.minY { list(in: app).swipeUp() }
+            XCTAssertLessThanOrEqual(fat.frame.maxY, bar.frame.minY)
         }
         try capture("Today intake card " + variant, in: app)
 

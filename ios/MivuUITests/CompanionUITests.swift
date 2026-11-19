@@ -101,9 +101,9 @@ import XCTest
             today.name = "Pip Rig Today " + appearance; today.lifetime = .keepAlways; add(today)
             XCTAssertTrue(app.buttons["logMeal"].isHittable)
             let list = app.collectionViews.firstMatch
-            for _ in 0..<6 where row.frame.maxY >= app.buttons["logMeal"].frame.minY - 12 { list.swipeUp() }
+            for _ in 0..<6 where row.frame.maxY >= app.buttons["snapIt"].frame.minY - 12 { list.swipeUp() }
             XCTAssertTrue(row.isHittable)
-            XCTAssertLessThan(row.frame.maxY, app.buttons["logMeal"].frame.minY - 8)
+            XCTAssertLessThan(row.frame.maxY, app.buttons["snapIt"].frame.minY - 8)
             row.tap()
             XCTAssertTrue(app.navigationBars["Meal"].waitForExistence(timeout: 5))
             app.terminate()

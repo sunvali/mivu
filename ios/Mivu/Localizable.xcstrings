@@ -50,6 +50,186 @@
         }
       }
     },
+    "%@ · %lld kcal" : {
+      "comment" : "Quoted re-log: chip title and the meal's calories",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$lld קק״ל"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · %lld kcal"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · %lld ккал"
+          }
+        }
+      }
+    },
+    "%@, %lld calories" : {
+      "comment" : "VoiceOver label for a re-log chip: title and calories",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$lld קלוריות"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, %lld calorías"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, калорий: %lld"
+          }
+        }
+      }
+    },
+    "Add a drink to breakfast: " : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "להוסיף משקה לארוחת הבוקר: "
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agrega una bebida al desayuno: "
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавь напиток к завтраку: "
+          }
+        }
+      }
+    },
+    "Add a drink to dinner: " : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "להוסיף משקה לארוחת הערב: "
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agrega una bebida a la cena: "
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавь напиток к ужину: "
+          }
+        }
+      }
+    },
+    "Add a drink to lunch: " : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "להוסיף משקה לארוחת הצהריים: "
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agrega una bebida al almuerzo: "
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавь напиток к обеду: "
+          }
+        }
+      }
+    },
+    "Add a drink…" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הוספת משקה…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agregar una bebida…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавить напиток…"
+          }
+        }
+      }
+    },
+    "Anything else?" : {
+      "comment" : "Pip's short line beside the quick prompts after something was logged",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "עוד משהו?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Algo más?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Что-нибудь ещё?"
+          }
+        }
+      }
+    },
+    "Calories left?" : {
+      "comment" : "Coach quick-prompt chip question sent to Coach about calories remaining today",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כמה קלוריות נשארו?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Cuántas calorías me quedan?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сколько калорий осталось?"
+          }
+        }
+      }
+    },
     "City" : {
       "comment" : "Search field placeholder: find a time zone by city name",
       "localizations" : {
@@ -69,6 +249,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Город"
+          }
+        }
+      }
+    },
+    "Dinner time?" : {
+      "comment" : "Pip's short line in the evening beside the quick prompts",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "זמן ארוחת ערב?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Hora de cenar?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пора ужинать?"
           }
         }
       }
@@ -95,6 +298,250 @@
         }
       }
     },
+    "Fills the message" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ממלא את ההודעה"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Llena el mensaje"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подставляет текст в сообщение"
+          }
+        }
+      }
+    },
+    "For a snack I had " : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כנשנוש אכלתי "
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De snack comí "
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На перекус было: "
+          }
+        }
+      }
+    },
+    "For breakfast I had %@" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לארוחת בוקר אכלתי %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Para el desayuno comí %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На завтрак было: %@"
+          }
+        }
+      }
+    },
+    "For dinner I had " : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לארוחת ערב אכלתי "
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Para la cena comí "
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На ужин было: "
+          }
+        }
+      }
+    },
+    "For dinner I had %@" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לארוחת ערב אכלתי %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Para la cena comí %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На ужин было: %@"
+          }
+        }
+      }
+    },
+    "For lunch I had " : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לארוחת צהריים אכלתי "
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Para el almuerzo comí "
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На обед было: "
+          }
+        }
+      }
+    },
+    "For lunch I had %@" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לארוחת צהריים אכלתי %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Para el almuerzo comí %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На обед было: %@"
+          }
+        }
+      }
+    },
+    "Hi again!" : {
+      "comment" : "Pip's short greeting at night beside the quick prompts",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שוב שלום!"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¡Hola otra vez!"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Снова привет!"
+          }
+        }
+      }
+    },
+    "Hide suggestions" : {
+      "comment" : "Button that collapses the Coach quick-prompt chips",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הסתרת הצעות"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ocultar sugerencias"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скрыть подсказки"
+          }
+        }
+      }
+    },
+    "Hide this suggestion" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הסתרת ההצעה הזו"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ocultar esta sugerencia"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скрыть эту подсказку"
+          }
+        }
+      }
+    },
+    "How was yesterday?" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "איך היה אתמול?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Cómo fue ayer?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Как прошёл вчерашний день?"
+          }
+        }
+      }
+    },
     "Keep %@" : {
       "comment" : "Toast button: keep the previous time zone; %@ is a city name",
       "localizations" : {
@@ -114,6 +561,261 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Оставить: %@"
+          }
+        }
+      }
+    },
+    "Log a snack…" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רישום נשנוש…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registrar un snack…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Записать перекус…"
+          }
+        }
+      }
+    },
+    "Log breakfast…" : {
+      "comment" : "Coach quick-prompt chip that starts a breakfast entry for the person to finish",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רישום ארוחת בוקר…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registrar desayuno…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Записать завтрак…"
+          }
+        }
+      }
+    },
+    "Log dinner…" : {
+      "comment" : "Coach quick-prompt chip that starts a dinner entry for the person to finish",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רישום ארוחת ערב…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registrar cena…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Записать ужин…"
+          }
+        }
+      }
+    },
+    "Log lunch…" : {
+      "comment" : "Coach quick-prompt chip that starts a lunch entry for the person to finish",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רישום ארוחת צהריים…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registrar almuerzo…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Записать обед…"
+          }
+        }
+      }
+    },
+    "Log weight…" : {
+      "comment" : "Coach quick-prompt chip that starts a weigh-in for the person to finish",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רישום משקל…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registrar peso…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Записать вес…"
+          }
+        }
+      }
+    },
+    "Logs one photo, no chat." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Logs one photo, no chat."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רושם תמונה אחת, בלי צ'אט."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registra una foto, sin chat."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Записывает одно фото, без чата."
+          }
+        }
+      }
+    },
+    "Lunch time?" : {
+      "comment" : "Pip's short line at lunchtime beside the quick prompts",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "זמן ארוחת צהריים?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Hora del almuerzo?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пора обедать?"
+          }
+        }
+      }
+    },
+    "Make breakfast a smaller portion: " : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "להקטין את המנה בארוחת הבוקר: "
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reduce la porción del desayuno: "
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сделай порцию на завтрак поменьше: "
+          }
+        }
+      }
+    },
+    "Make dinner a smaller portion: " : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "להקטין את המנה בארוחת הערב: "
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reduce la porción de la cena: "
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сделай порцию на ужин поменьше: "
+          }
+        }
+      }
+    },
+    "Make lunch a smaller portion: " : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "להקטין את המנה בארוחת הצהריים: "
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reduce la porción del almuerzo: "
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сделай порцию на обед поменьше: "
+          }
+        }
+      }
+    },
+    "Morning!" : {
+      "comment" : "Pip's short morning greeting beside the quick prompts",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בוקר טוב!"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¡Buenos días!"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доброе утро!"
           }
         }
       }
@@ -164,6 +866,200 @@
         }
       }
     },
+    "Opens a chat where you can add photos and notes." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens a chat where you can add photos and notes."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פותח צ'אט שבו אפשר להוסיף תמונות והערות."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre un chat donde puedes agregar fotos y notas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Открывает чат, где можно добавить фото и заметки."
+          }
+        }
+      }
+    },
+    "Opens a form to type in nutrition." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens a form to type in nutrition."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פותח טופס להזנת ערכים תזונתיים."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre un formulario para escribir los datos nutricionales."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Открывает форму для ввода питательных данных."
+          }
+        }
+      }
+    },
+    "Protein ideas?" : {
+      "comment" : "Coach quick-prompt chip question sent to Coach for protein-rich food ideas",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רעיונות לחלבון?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Ideas con proteínas?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Идеи с белком?"
+          }
+        }
+      }
+    },
+    "Quick prompts above the Coach message box." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הצעות מהירות מעל תיבת ההודעה לפיפ."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sugerencias rápidas encima del cuadro de mensaje de Coach."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Быстрые подсказки над полем сообщения в Coach."
+          }
+        }
+      }
+    },
+    "Same breakfast" : {
+      "comment" : "Coach quick-prompt chip: log yesterday's breakfast again",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כמו אתמול בבוקר"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mismo desayuno"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тот же завтрак"
+          }
+        }
+      }
+    },
+    "Same dinner" : {
+      "comment" : "Coach quick-prompt chip: log yesterday's dinner again",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כמו אתמול בערב"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Misma cena"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тот же ужин"
+          }
+        }
+      }
+    },
+    "Same lunch" : {
+      "comment" : "Coach quick-prompt chip: log yesterday's lunch again",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כמו אתמול בצהריים"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mismo almuerzo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тот же обед"
+          }
+        }
+      }
+    },
+    "Sends to Coach" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "נשלח לפיפ"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Envía a Coach"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отправляет в Coach"
+          }
+        }
+      }
+    },
     "Set automatically" : {
       "comment" : "Toggle: the diary follows the phone's time zone",
       "localizations" : {
@@ -183,6 +1079,104 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Автоматически"
+          }
+        }
+      }
+    },
+    "Show suggestions" : {
+      "comment" : "Button and setting that show the Coach quick-prompt chips",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הצגת הצעות"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar sugerencias"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показать подсказки"
+          }
+        }
+      }
+    },
+    "Smaller portion…" : {
+      "comment" : "Coach quick-prompt chip that starts asking Coach to shrink the meal just logged",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מנה קטנה יותר…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Porción más pequeña…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Порцию поменьше…"
+          }
+        }
+      }
+    },
+    "Snack time?" : {
+      "comment" : "Pip's short line in the afternoon beside the quick prompts",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "זמן נשנוש?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Hora del snack?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пора перекусить?"
+          }
+        }
+      }
+    },
+    "Snap a photo, or chat with Pip to describe it." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Snap a photo, or chat with Pip to describe it."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אפשר לצלם תמונה, או לספר לפיפ בצ'אט."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toma una foto o chatea con Pip para describirla."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сфотографируй еду или опиши её в чате с Пипом."
           }
         }
       }
@@ -275,6 +1269,120 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Тренировка недоступна"
+          }
+        }
+      }
+    },
+    "Usual breakfast" : {
+      "comment" : "Coach quick-prompt chip: log the most frequent breakfast again",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ארוחת הבוקר הקבועה"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desayuno de siempre"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обычный завтрак"
+          }
+        }
+      }
+    },
+    "Usual dinner" : {
+      "comment" : "Coach quick-prompt chip: log the most frequent dinner again",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ארוחת הערב הקבועה"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cena de siempre"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обычный ужин"
+          }
+        }
+      }
+    },
+    "Usual lunch" : {
+      "comment" : "Coach quick-prompt chip: log the most frequent lunch again",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ארוחת הצהריים הקבועה"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Almuerzo de siempre"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обычный обед"
+          }
+        }
+      }
+    },
+    "Was it balanced?" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "זה היה מאוזן?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Comí equilibrado?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Питание сбалансировано?"
+          }
+        }
+      }
+    },
+    "Weekly trend?" : {
+      "comment" : "Coach quick-prompt chip question sent to Coach about the week's weight",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מה המגמה השבועית?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Tendencia semanal?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тренд за неделю?"
           }
         }
       }
@@ -3926,35 +5034,6 @@
         }
       }
     },
-    "Add photos or a note." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Add photos or a note."
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "אפשר להוסיף תמונות או הערה."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Agrega fotos o una nota."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Добавь фото или заметку."
-          }
-        }
-      }
-    },
     "Add set" : {
       "comment" : "Button: adds a set (reps and weight) to a strength exercise",
       "localizations" : {
@@ -7061,6 +8140,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "История чата недоступна. Попробуй ещё раз."
+          }
+        }
+      }
+    },
+    "Chat with Pip" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "צ'אט עם פיפ"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chatear con Pip"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Чат с Пипом"
           }
         }
       }
@@ -14861,6 +15962,28 @@
         }
       }
     },
+    "Instant photo log" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רישום מהיר מתמונה"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registro al instante"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Мгновенная запись по фото"
+          }
+        }
+      }
+    },
     "Insufficient measurements for a weight trend." : {
       "localizations" : {
         "he" : {
@@ -16813,29 +17936,6 @@
         }
       }
     },
-    "Log breakfast" : {
-      "comment" : "Siri/shortcut or button: record a breakfast meal",
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "רישום ארוחת בוקר"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Registrar desayuno"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Записать завтрак"
-          }
-        }
-      }
-    },
     "Log meal" : {
       "comment" : "Button/action: record a meal",
       "extractionState" : "manual",
@@ -16918,28 +18018,6 @@
         }
       }
     },
-    "Log my weight" : {
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "רישום המשקל שלי"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Registrar mi peso"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Записать мой вес"
-          }
-        }
-      }
-    },
     "Log to %@" : {
       "comment" : "Button: add a meal to a day; %@ is the day name",
       "localizations" : {
@@ -16982,28 +18060,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Записать вес"
-          }
-        }
-      }
-    },
-    "Log with Pip" : {
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "רישום עם פיפ"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Registrar con Pip"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Записать с Пипом"
           }
         }
       }
@@ -24858,52 +25914,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Открыть: %@"
-          }
-        }
-      }
-    },
-    "See progress" : {
-      "comment" : "Button: opens Progress",
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "מעבר להתקדמות"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ver progreso"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Смотреть прогресс"
-          }
-        }
-      }
-    },
-    "See today" : {
-      "comment" : "Button: opens Today",
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "מעבר להיום"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ver hoy"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Открыть «Сегодня»"
           }
         }
       }

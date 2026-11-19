@@ -73,6 +73,17 @@ in this Russian. Applied: plainer ChatGPT connection, backup and error wording f
 an older reader (9 rows), two calques, and «в коуче» → «в Coach» where the
 feature is meant (2 rows).
 
+## Merged with main (2026-11-19)
+
+`main` at `54b91533` (Coach quick prompts #153, Health update purpose string
+#154, Dynamic Island #156, Snap It on the Today bar #158) added 51 strings; each
+got Spanish and Russian from one translator agent per language that read the
+Swift callers, then an editor pass (Russian prefills follow the existing «На
+завтрак было: »; Spanish «snack» added to the glossary). After the merge:
+`languages.py check` passes; on the same simulator `testPhoneGetsItsLanguage`
+(spanish, russian, hebrew) and `testTextIsTranslated` (russian) pass. These 51
+strings had no separate review pass.
+
 ## Code changes found by the review
 
 - The calorie band "Off" had the same key as the switched-off status, so it read

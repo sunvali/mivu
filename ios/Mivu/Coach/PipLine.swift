@@ -8,7 +8,7 @@ enum PipLine: Equatable {
     case connect
 
     static func current(hour: Int, mealsLogged: Bool, typing: Bool, connected: Bool, processing: Bool,
-                        withPhotos: Bool, recovery: Bool, error: String?, turnState: CoachTurnState?) -> PipLine? {
+                        withPhotos: Bool, recovery: Bool, error: String?, turnState: CoachTurnState?, chips: Bool = false) -> PipLine? {
         if recovery {
             switch turnState {
             case .waitingForConnection: return .connect
@@ -21,6 +21,17 @@ enum PipLine: Equatable {
         if processing { return .working(withPhotos ? String(localized: "Looking at your photo…") : String(localized: "Counting that up…")) }
         if !connected { return .connect }
         if typing { return nil }
+        // Beside the quick prompts Pip keeps to a short mood line, so the bubble never repeats the chips.
+        if chips {
+            if mealsLogged { return .say(String(localized: "Anything else?")) }
+            switch hour {
+            case 4..<11: return .say(String(localized: "Morning!"))
+            case 11..<15: return .say(String(localized: "Lunch time?"))
+            case 15..<18: return .say(String(localized: "Snack time?"))
+            case 18..<22: return .say(String(localized: "Dinner time?"))
+            default: return .say(String(localized: "Hi again!"))
+            }
+        }
         if mealsLogged { return .say(String(localized: "Anything else to log?")) }
         switch hour {
         case 4..<11: return .say(String(localized: "Morning! What’s for breakfast?"))

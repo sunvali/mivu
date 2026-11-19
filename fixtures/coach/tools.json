@@ -3,11 +3,17 @@
   "name" : "mivu",
   "tools" : [
     {
-      "description" : "Ask before logging only when food, serving, day or an existing record is genuinely ambiguous. Unknown exact grams or milliliters alone do not block a clearly labelled estimate from text, photos or a clear matching committed portion. Choose portion for an ambiguous serving, food only when no reasonable food guess exists, day for the recording date, meal or workout for an ambiguous existing record. Use this tool alone, before any writes in this turn. Add candidates (at most 4 real meal_id, optional item_id) when the choice is among known records. Use kind confirm with exactly one meal candidate (meal_id only) before deleting a whole meal. The app displays its own question; the user answers in a new turn.",
+      "description" : "Ask before logging only when food, serving, day or an existing record is genuinely ambiguous. Unknown exact grams or milliliters alone do not block a clearly labelled estimate from text, photos or a clear matching committed portion. Choose portion for an ambiguous serving, food only when no reasonable food guess exists, day for the recording date, meal or workout for an ambiguous existing record. Use this tool alone in its call. When a message names several foods, log the clear ones before asking. For the one unclear food, set about to the person's name for it without the amount, and options to 2 or 3 short plain names of the most likely foods it could be; the app shows them as one-tap answers. Add candidates (at most 4 real meal_id, optional item_id) when the choice is among known records. Use kind confirm with exactly one meal candidate (meal_id only) before deleting a whole meal. The app displays its own question; the user answers in a new turn.",
       "name" : "ask_clarification",
       "parameters" : {
         "additionalProperties" : false,
         "properties" : {
+          "about" : {
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
           "candidates" : {
             "items" : {
               "additionalProperties" : false,
@@ -44,11 +50,23 @@
               "confirm"
             ],
             "type" : "string"
+          },
+          "options" : {
+            "items" : {
+              "type" : "string"
+            },
+            "maxItems" : 3,
+            "type" : [
+              "array",
+              "null"
+            ]
           }
         },
         "required" : [
+          "about",
           "candidates",
-          "kind"
+          "kind",
+          "options"
         ],
         "type" : "object"
       },
@@ -596,6 +614,40 @@
           "eaten_at",
           "items",
           "review_first",
+          "target_local_date"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Log again, unchanged, a saved meal the user quoted to repeat when their message keeps the same foods and amounts. Call get_meal on it first. Copies its items and nutrition exactly as a new meal on target_local_date. If they changed foods or amounts, or get_meal fails, use log_food instead.",
+      "name" : "copy_meal",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "eaten_at" : {
+            "description" : "Same rules as log_food eaten_at; otherwise null.",
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "expected_revision" : {
+            "type" : "integer"
+          },
+          "source_meal_id" : {
+            "type" : "string"
+          },
+          "target_local_date" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "eaten_at",
+          "expected_revision",
+          "source_meal_id",
           "target_local_date"
         ],
         "type" : "object"

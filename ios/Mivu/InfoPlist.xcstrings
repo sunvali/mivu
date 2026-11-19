@@ -119,6 +119,35 @@
         }
       }
     },
+    "NSHealthUpdateUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu does not save anything to Apple Health. It only reads your workouts so their active calories can add to your daily food budget."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu לא שומר שום דבר ב-Apple Health. הוא רק קורא את האימונים שלך כדי שהקלוריות הפעילות שלהם יתווספו לתקציב המזון היומי שלך."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu no guarda nada en Salud. Solo lee tus entrenamientos para que sus calorías activas se sumen a tu presupuesto diario de alimentos."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mivu ничего не сохраняет в «Здоровье». Приложение только читает твои тренировки, чтобы их активные калории прибавлялись к дневной норме."
+          }
+        }
+      }
+    },
     "NSMicrophoneUsageDescription" : {
       "extractionState" : "manual",
       "localizations" : {

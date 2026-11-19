@@ -34,21 +34,15 @@ enum CoachReplyLines {
     }
 
     enum FollowUp: Hashable {
-        case today, progress, day(String)
-        /// What the side pane shows for this follow-up; nil is Today.
-        var pane: CoachPane? {
-            switch self { case .today: nil; case .progress: .progress; case .day(let date): .day(date) }
-        }
+        case day(String)
+        var pane: CoachPane { switch self { case .day(let date): .day(date) } }
     }
 
-    /// Receipts decide the first two; `consulted` adds what the reply only read (a question about last week).
+    /// A past day the reply read (a question about last Tuesday). Today and progress live in the quick prompts.
     static func followUps(for turn: CoachExchangeSummary, consulted: [CoachConsulted] = [], today: String? = nil) -> [FollowUp] {
         guard turn.state == .completed else { return [] }
-        var result: [FollowUp] = (turn.receipts.contains { $0.mealID != nil } ? [.today] : []) + (turn.receipts.contains { $0.weightID != nil && !$0.operationKey.contains("/delete_weight/") } ? [.progress] : [])
-        for read in consulted {
-            let followUp: FollowUp = switch read { case .progress: .progress; case .day(let date): date == today ? .today : .day(date) }
-            if !result.contains(followUp) { result.append(followUp) }
-        }
+        var result: [FollowUp] = []
+        for case .day(let date) in consulted where date != today && !result.contains(.day(date)) { result.append(.day(date)) }
         return result
     }
 
