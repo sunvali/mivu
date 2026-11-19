@@ -11,7 +11,8 @@ final class FeedbackUITests: XCTestCase {
         for _ in 0..<8 where !row.isHittable { list.swipeUp() }
         row.tap()
         XCTAssertTrue(app.navigationBars["Send feedback"].waitForExistence(timeout: 5))
-        for id in ["feedbackKind", "feedbackMessage", "feedbackEmail"] { XCTAssertTrue(app.descendants(matching: .any)[id].firstMatch.exists, id) }
+        // No email field while reports go through the mail app.
+        for id in ["feedbackKind", "feedbackMessage"] { XCTAssertTrue(app.descendants(matching: .any)[id].firstMatch.exists, id) }
         XCTAssertTrue(app.staticTexts["Your diary is never included."].exists || { app.swipeUp(); return app.staticTexts["Your diary is never included."].exists }())
         let send = app.buttons["feedbackSend"]
         XCTAssertTrue(send.exists); XCTAssertFalse(send.isEnabled)

@@ -94,6 +94,8 @@ enum Feedback {
             URLQueryItem(name: "subject", value: "[\(report.kind.rawValue.capitalized)] Mivu \(report.appVersion) (\(report.build)), iOS \(report.os)"),
             URLQueryItem(name: "body", value: "\(report.message)\n\n---\n\(report.includedLines.joined(separator: "\n"))")
         ]
+        // Some mail apps read a bare + as a space.
+        parts.percentEncodedQuery = parts.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
         return parts.url!
     }
 

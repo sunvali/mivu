@@ -22,12 +22,14 @@ import SwiftUI
     }
 
     /// Nil while the fields are invalid.
-    var report: FeedbackReport? { FeedbackReport(kind: kind, message: message, email: email, diagnostics: diagnostics, context: context) }
+    var report: FeedbackReport? { FeedbackReport(kind: kind, message: message, email: asksEmail ? email : "", diagnostics: diagnostics, context: context) }
+    /// A mail draft replies to its own sender, so the field appears only when the app sends the report itself.
+    var asksEmail: Bool { endpoint != nil }
     var canSend: Bool { report != nil && phase != .sending }
     var count: Int { message.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count }
     var overLimit: Bool { count > Feedback.messageLimit }
     var emailInvalid: Bool {
-        !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        asksEmail && !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && FeedbackReport(kind: kind, message: "x", email: email, diagnostics: diagnostics, context: nil) == nil
     }
     /// Shown before anything is typed too, so the list never hides something that will be sent.
@@ -50,6 +52,7 @@ import SwiftUI
 
     /// Opening a draft is not sending, so this never reaches `.sent`.
     private func mail(_ report: FeedbackReport, _ openMail: OpenMail) async {
+        phase = .sending
         phase = await openMail(Feedback.mailto(report)) ? .editing : .mailUnavailable
     }
 }
@@ -84,7 +87,7 @@ struct FeedbackView: View {
                         .accessibilityIdentifier("feedbackCount")
                 }
             }
-            Section {
+            if form.asksEmail { Section {
                 TextField("Email (optional)", text: $form.email)
                     .textContentType(.emailAddress).keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
@@ -97,7 +100,7 @@ struct FeedbackView: View {
                 } else {
                     Text("Add it if you'd like a reply.").foregroundStyle(Color.diarySecondary)
                 }
-            }
+            } }
             Section {
                 Text(form.includedLines.joined(separator: " · ")).font(.subheadline).foregroundStyle(Color.diarySecondary)
                     .accessibilityIdentifier("feedbackIncluded")
@@ -116,6 +119,16 @@ struct FeedbackView: View {
         .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { typing = false } } }
         .sensoryFeedback(.success, trigger: form.phase) { _, phase in phase == .sent }
         .sensoryFeedback(.success, trigger: copied)
+        .onChange(of: form.phase) { _, phase in
+            // The result appears away from VoiceOver's focus, so say it.
+            let spoken: String? = switch phase {
+            case .sent: String(localized: "Thanks! Your report is on its way.")
+            case .failed: String(localized: "Couldn't send. Check your connection and try again.")
+            case .mailUnavailable: String(localized: "Mail isn't set up on this device.")
+            case .editing, .sending: nil
+            }
+            if let spoken { AccessibilityNotification.Announcement(spoken).post() }
+        }
         .task(id: form.phase) {
             guard form.phase == .sent else { return }
             try? await Task.sleep(for: .seconds(1.5))

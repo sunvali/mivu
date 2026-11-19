@@ -88,6 +88,8 @@ private final class FeedbackStub: URLProtocol, @unchecked Sendable {
         #expect(body.contains("It broke"))
         for line in full.includedLines { #expect(body.contains(line)) }
         #expect(!body.contains("a@b.co"))
+        let plus = try #require(FeedbackReport(kind: .bug, message: "1+1", email: "", diagnostics: d, context: nil))
+        #expect(Feedback.mailto(plus).absoluteString.contains("1%2B1"))
     }
     @Test func contextFromTurnState() {
         #expect(FeedbackContext(.waitingForNetwork) == .coachNetwork)
@@ -193,6 +195,19 @@ private final class FeedbackStub: URLProtocol, @unchecked Sendable {
         await reopened.submit(openMail: open(calls))
         #expect(reopened.phase == .sent)
         #expect(FeedbackForm(kind: .bug, context: nil, endpoint: endpoint, diagnostics: d) { _, _ in }.message.isEmpty)
+    }
+    @Test func emailPathIgnoresTheReplyAddressItCannotCarry() async throws {
+        let calls = Calls(), form = form(calls, endpoint: nil)
+        form.email = "nope"
+        #expect(form.canSend); #expect(!form.emailInvalid); #expect(form.report?.email == nil)
+    }
+    @Test func secondTapWhileMailOpensIsIgnored() async {
+        let calls = Calls(), form = form(calls, endpoint: nil)
+        let slow: FeedbackForm.OpenMail = { calls.mail.append($0); try? await Task.sleep(for: .milliseconds(20)); return true }
+        async let first: Void = form.submit(openMail: slow)
+        async let second: Void = form.submit(openMail: slow)
+        _ = await (first, second)
+        #expect(calls.mail.count == 1); #expect(form.phase == .editing)
     }
     @Test func overLimitDisablesSend() {
         let calls = Calls(), form = form(calls, endpoint: endpoint)
