@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/sunvali/mivu/compare/ios-v1.6.0...ios-v1.7.0) (2026-11-19)
+
+
+### Features
+
+* **languages:** switch on Spanish and Russian ([#168](https://github.com/sunvali/mivu/issues/168)) ([d77de4d](https://github.com/sunvali/mivu/commit/d77de4d4df4723ff8d762fdb63009fd224ec8860))
+
 ## [1.6.0](https://github.com/sunvali/mivu/compare/ios-v1.5.0...ios-v1.6.0) (2026-11-19)
 
 
