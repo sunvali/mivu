@@ -68,6 +68,14 @@ import Testing
         #expect(try state(eaten: full, target: targets).hideWhenLocked)
     }
 
+    @Test func enabledUnlessTurnedOff() throws {
+        let defaults = try #require(UserDefaults(suiteName: #function))
+        defaults.removePersistentDomain(forName: #function)
+        #expect(DayProgressSync.isEnabled(defaults))
+        defaults.set(false, forKey: DayProgressSync.enabledKey)
+        #expect(!DayProgressSync.isEnabled(defaults))
+    }
+
     @Test func disabledEndsAll() { #expect(DayProgressSync.decide(enabled: false, authorized: true, hasDiary: true, running: 1) == .endAll) }
     @Test func unauthorizedEndsAll() { #expect(DayProgressSync.decide(enabled: true, authorized: false, hasDiary: true, running: 1) == .endAll) }
     @Test func noDiaryEndsAll() { #expect(DayProgressSync.decide(enabled: true, authorized: true, hasDiary: false, running: 1) == .endAll) }

@@ -6,7 +6,7 @@ import UserNotifications
 struct DaySettingsSection: View {
     let readModel: DiaryReadModel?
     @AppStorage(DayCutoff.key) private var cutoff = 4
-    @AppStorage(DayProgressSync.enabledKey) private var liveActivity = false
+    @AppStorage(DayProgressSync.enabledKey) private var liveActivity = true
     @AppStorage(DayProgressSync.hideWhenLockedKey) private var hideWhenLocked = true
     @State private var activitiesAllowed = ActivityAuthorizationInfo().areActivitiesEnabled
     @Environment(\.openURL) private var openURL
