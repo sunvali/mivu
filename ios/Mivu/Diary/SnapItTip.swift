@@ -81,9 +81,10 @@ struct SnapItShortcutsView: View {
         }
     }
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var phase
     @State private var place = Place.lockScreen
-    @State private var playing = true
+    // Read once at creation, so a Reduce Motion user never sees the first frames move.
+    @State private var playing = !UIAccessibility.isReduceMotionEnabled
     var body: some View {
         NavigationStack {
             List {
@@ -114,7 +115,6 @@ struct SnapItShortcutsView: View {
             .navigationTitle("Snap It shortcuts")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.accessibilityIdentifier("doneSnapItShortcuts") } }
-            .onAppear { playing = !reduceMotion }
         }
         .tint(.diaryAccent)
     }
@@ -122,7 +122,8 @@ struct SnapItShortcutsView: View {
     /// A screen recording of the steps below; tap to pause, and it waits for a tap when Reduce Motion is on.
     private var video: some View {
         Button { playing.toggle() } label: {
-            LoopingVideo(name: "snap-it-\(place.rawValue)", playing: playing).id(place)
+            // iOS pauses the player in the background; the phase makes it resume when the user returns from adding the control.
+            LoopingVideo(name: "snap-it-\(place.rawValue)", playing: playing && phase == .active).id(place)
                 .aspectRatio(600.0 / 1304.0, contentMode: .fit)
                 .clipShape(.rect(cornerRadius: 24))
                 .overlay { RoundedRectangle(cornerRadius: 24).strokeBorder(Color.diaryRule, lineWidth: 1) }
