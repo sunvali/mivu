@@ -2,6 +2,7 @@ import SwiftUI
 
 enum MivuLinks {
     static let privacyPolicy = URL(string: "https://mivuapp.com/privacy")!
+    static let appStore = URL(string: "https://apps.apple.com/app/id6826633410")!
     static let writeReview = URL(string: "https://apps.apple.com/app/id6826633410?action=write-review")!
     static let chatGPTUsage = URL(string: "https://chatgpt.com/settings/usage")!
     /// OpenAI's own explanation of which plans other apps may use.
