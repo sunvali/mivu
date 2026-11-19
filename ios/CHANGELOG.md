@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.4.0](https://github.com/sunvali/mivu/compare/ios-v1.3.0...ios-v1.4.0) (2026-11-18)
+
+
+### Features
+
+* **coach:** answer food questions on the ChatGPT plan ([#127](https://github.com/sunvali/mivu/issues/127)) ([14a3622](https://github.com/sunvali/mivu/commit/14a36222e40e8969cee9934765b530d32a50cf15))
+* **coach:** context-aware quick prompts ([#153](https://github.com/sunvali/mivu/issues/153)) ([6106783](https://github.com/sunvali/mivu/commit/610678398672269d6d8074c8b2560c5f9bab7de4))
+* **coach:** read nutrition labels from package photos ([#142](https://github.com/sunvali/mivu/issues/142)) ([f2698a0](https://github.com/sunvali/mivu/commit/f2698a0a9d4119907fb73dc0c30221a741f8f575))
+* **coach:** save clear foods and offer likely answers for an unclear one ([#145](https://github.com/sunvali/mivu/issues/145)) ([456d50a](https://github.com/sunvali/mivu/commit/456d50aaecb4118a56e4491f6e1307391dca3a6a))
+* **connection:** handle ChatGPT plans that can't be used in Mivu ([#150](https://github.com/sunvali/mivu/issues/150)) ([c84963f](https://github.com/sunvali/mivu/commit/c84963f4fa57778a861930fd0ef34ce0c9b2f91a))
+* **duo:** expand the Coach chat to the whole screen ([#130](https://github.com/sunvali/mivu/issues/130)) ([c6bb0b7](https://github.com/sunvali/mivu/commit/c6bb0b737727f4aa6ca84136889e3c41ec6a59b5))
+* **duo:** open Coach results beside the chat, chat on the right ([#128](https://github.com/sunvali/mivu/issues/128)) ([8b96cd3](https://github.com/sunvali/mivu/commit/8b96cd3fbfa0c5f346c4aa9fec7b34aa9fe30c16))
+* **duo:** two-column Diary when sideways ([#131](https://github.com/sunvali/mivu/issues/131)) ([bc0753a](https://github.com/sunvali/mivu/commit/bc0753a808dc7672265aeb3b228bfaae28be8671))
+* follow the phone's time zone when traveling ([#149](https://github.com/sunvali/mivu/issues/149)) ([5a6f845](https://github.com/sunvali/mivu/commit/5a6f845bdd8c5ebcf7516b2f2df26b6604ea97da))
+* **health:** import workouts from Apple Health and credit their active calories ([#147](https://github.com/sunvali/mivu/issues/147)) ([dce655d](https://github.com/sunvali/mivu/commit/dce655dea20692c731d9a6021b33a1216ad15176))
+* **ios:** show macros in meal notifications ([358c959](https://github.com/sunvali/mivu/commit/358c959b240c39a6a4d46786a6fa6bf6206438d7))
+* **languages:** Hebrew translation and Coach in the message's language ([#139](https://github.com/sunvali/mivu/issues/139)) ([d2e7c49](https://github.com/sunvali/mivu/commit/d2e7c49c5d8df082bbd218e7ce5052bee96be0ae))
+* **languages:** Hebrew widgets, Siri, reports and store listing, and ship Hebrew ([#140](https://github.com/sunvali/mivu/issues/140)) ([6b57dc7](https://github.com/sunvali/mivu/commit/6b57dc7fb2e55c973d0224e1452955c200593225))
+* **languages:** make the app ready for any language, including right-to-left ([#132](https://github.com/sunvali/mivu/issues/132)) ([732dfe6](https://github.com/sunvali/mivu/commit/732dfe6d4ba6dd8ae56e069bdb28c566a7ff1ed9))
+* **quick-log:** Pip head symbol for Snap It shortcuts ([#135](https://github.com/sunvali/mivu/issues/135)) ([49b3e63](https://github.com/sunvali/mivu/commit/49b3e6353aebd0e36109dab315928ef6b265967e))
+* **stickers:** Pip sticker pack for WhatsApp and iMessage ([#138](https://github.com/sunvali/mivu/issues/138)) ([5b8c644](https://github.com/sunvali/mivu/commit/5b8c644c9e117089503b3f57532bebb7673a4af5))
+* **stickers:** Pip stickers in the iOS and Android apps ([#141](https://github.com/sunvali/mivu/issues/141)) ([9b24b3f](https://github.com/sunvali/mivu/commit/9b24b3fca17c4b4a4626b1c0a5f2dd51f5cb5c54))
+
+
+### Bug Fixes
+
+* **coach:** give chat-logged meals a time ([#122](https://github.com/sunvali/mivu/issues/122)) ([90664b9](https://github.com/sunvali/mivu/commit/90664b9aa450a0bd1cac68350487ede856850330))
+* **coach:** hide Apple Intelligence on iPhones that cannot run it ([#136](https://github.com/sunvali/mivu/issues/136)) ([a68417f](https://github.com/sunvali/mivu/commit/a68417f345d45a93c7810288b1b90e2aaf3252ff))
+* **copy:** include ChatGPT Go among eligible plans ([#125](https://github.com/sunvali/mivu/issues/125)) ([9773161](https://github.com/sunvali/mivu/commit/97731611d637b4c45bd5bd0e81423527803917af))
+* **duo:** keep Coach's empty state in its space and let the sweep drive the side rail ([#134](https://github.com/sunvali/mivu/issues/134)) ([b78cf22](https://github.com/sunvali/mivu/commit/b78cf22e699badf53ac796069a28af455bd7ac1d))
+* **today:** show 0 instead of a dash on a blank day ([#133](https://github.com/sunvali/mivu/issues/133)) ([6ba7efc](https://github.com/sunvali/mivu/commit/6ba7efcf5e7ed59d426015cef280860bf9d07a0a))
+
 ## [1.3.0](https://github.com/sunvali/mivu/compare/ios-v1.2.1...ios-v1.3.0) (2026-11-14)
 
 
