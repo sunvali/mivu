@@ -81,23 +81,21 @@ import XCTest
         XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: selected, object: coach)], timeout: 10), .completed)
     }
 
-    func testSnapItTipAppearsAfterThirdLogAndOpensShortcutSteps() {
+    func testSnapItTipAppearsAfterFirstLogAndOpensShortcutSteps() {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--proof-english", "--snap-it-tip"]
         app.launch()
         let how = app.buttons["Show me how"], snapIt = app.buttons["snapIt"], toast = app.buttons["quickLogAddNote"]
         XCTAssertTrue(snapIt.waitForExistence(timeout: 15))
-        for log in 1...3 {
-            XCTAssertFalse(how.exists, "No tip before the third photo log (log \(log))")
-            snapIt.tap()
-            let photo = app.buttons["quickLogSyntheticPhoto"]
-            XCTAssertTrue(photo.waitForExistence(timeout: 10))
-            photo.tap()
-            XCTAssertTrue(toast.waitForExistence(timeout: 10))
-            // A log counts once its toast has run its course, so the tip never covers Add Note.
-            XCTAssertTrue(toast.waitForNonExistence(timeout: 10))
-        }
-        XCTAssertTrue(how.waitForExistence(timeout: 5), "The tip points at Snap It after the third log")
+        XCTAssertFalse(how.exists, "No tip before the first photo log")
+        snapIt.tap()
+        let photo = app.buttons["quickLogSyntheticPhoto"]
+        XCTAssertTrue(photo.waitForExistence(timeout: 10))
+        photo.tap()
+        XCTAssertTrue(toast.waitForExistence(timeout: 10))
+        XCTAssertFalse(how.exists, "The tip waits for the toast, so it never covers Add Note")
+        XCTAssertTrue(toast.waitForNonExistence(timeout: 10))
+        XCTAssertTrue(how.waitForExistence(timeout: 5), "The tip points at Snap It after the first log")
         XCTAssertTrue(app.staticTexts["Add Snap It to your Lock Screen, Control Center or Action button."].exists)
         how.tap()
         XCTAssertTrue(app.buttons["snapItVideo"].waitForExistence(timeout: 5), "The steps open with a video")

@@ -5,7 +5,7 @@ import WidgetKit
 
 /// Teaches that Snap It also lives outside the app. iOS offers no way to add the control for the user, so Mivu shows the steps.
 struct SnapItTip: Tip {
-    /// One photo log whose toast ran its course; the tip waits for the third so it reaches people who already use Snap It.
+    /// One photo log whose toast ran its course; the tip follows the first, when the user has just seen what Snap It does.
     static let logged = Tips.Event(id: "snapItLogged")
     @Parameter static var controlAdded: Bool = false
 
@@ -13,7 +13,7 @@ struct SnapItTip: Tip {
     var message: Text? { Text("Add Snap It to your Lock Screen, Control Center or Action button.") }
     var actions: [Action] { Action(id: "how") { Text("Show me how") } }
     var rules: [Rule] {
-        #Rule(Self.logged) { $0.donations.count >= 3 }
+        #Rule(Self.logged) { $0.donations.count >= 1 }
         #Rule(Self.$controlAdded) { !$0 }
     }
 
