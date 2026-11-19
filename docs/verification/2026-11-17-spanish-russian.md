@@ -49,6 +49,11 @@ while the tab and feature name stay "Coach" (33 rows). After this round:
 `languages.py check` passes; `testPhoneGetsItsLanguage` (spanish, russian) and
 `testTextIsTranslated` (russian) pass on the same simulator.
 
+A final native Russian pass after these changes found 1 error («Коуч нужен быстрый
+ответ» → «Коучу нужен…», from the term change) and 6 improvements («Отправлено
+коучу», and «дневник на этом iPhone» in place of «личный локальный дневник»); all
+7 applied. Its one code note was wrong (the label it called unused is used).
+
 ## Code changes found by the review
 
 - The calorie band "Off" had the same key as the switched-off status, so it read
