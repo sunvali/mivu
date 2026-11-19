@@ -96,6 +96,29 @@
         }
       }
     },
+    "Action button" : {
+      "comment" : "Section title: the iPhone hardware Action button, as Apple names it",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כפתור הפעולה"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Botón de acción"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кнопка действия"
+          }
+        }
+      }
+    },
     "Add a drink to breakfast: " : {
       "localizations" : {
         "he" : {
@@ -184,6 +207,28 @@
         }
       }
     },
+    "Add Snap It to your Lock Screen, Control Center or Action button." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הוסיפו את Snap It למסך הנעילה, למרכז הבקרה או לכפתור הפעולה."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añade Snap It a la pantalla de bloqueo, al centro de control o al botón de acción."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавьте Snap It на экран блокировки, в Пункт управления или на кнопку действия."
+          }
+        }
+      }
+    },
     "Anything else?" : {
       "comment" : "Pip's short line beside the quick prompts after something was logged",
       "localizations" : {
@@ -249,6 +294,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Город"
+          }
+        }
+      }
+    },
+    "Control Center" : {
+      "comment" : "Section title: the iOS Control Center, as Apple names it",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מרכז הבקרה"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Centro de control"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пункт управления"
           }
         }
       }
@@ -565,6 +633,29 @@
         }
       }
     },
+    "Lock Screen" : {
+      "comment" : "Section title: the iOS Lock Screen, as Apple names it",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מסך הנעילה"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pantalla de bloqueo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Экран блокировки"
+          }
+        }
+      }
+    },
     "Log a snack…" : {
       "localizations" : {
         "he" : {
@@ -843,6 +934,72 @@
         }
       }
     },
+    "On iPhone 15 Pro and later." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ב-iPhone 15 Pro ואילך."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En iPhone 15 Pro y posteriores."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На iPhone 15 Pro и новее."
+          }
+        }
+      }
+    },
+    "Open Settings and tap Action Button." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פתחו את ״הגדרות״ והקישו על ״כפתור הפעולה״."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre Ajustes y toca Botón de acción."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Откройте «Настройки» и нажмите «Кнопка действия»."
+          }
+        }
+      }
+    },
+    "Open the camera straight from your iPhone, without opening Mivu first." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פתחו את המצלמה ישירות מה-iPhone, בלי לפתוח קודם את Mivu."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre la cámara directamente desde tu iPhone, sin abrir Mivu primero."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Открывайте камеру прямо с iPhone, не заходя сначала в Mivu."
+          }
+        }
+      }
+    },
     "Original meal day" : {
       "comment" : "Meal composer: the waking day of a meal whose day has not loaded",
       "localizations" : {
@@ -969,6 +1126,28 @@
         }
       }
     },
+    "Remove one of the bottom buttons, then tap +." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הסירו אחד מהכפתורים התחתונים ואז הקישו על +."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quita uno de los botones inferiores y toca +."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалите одну из нижних кнопок, затем нажмите +."
+          }
+        }
+      }
+    },
     "Same breakfast" : {
       "comment" : "Coach quick-prompt chip: log yesterday's breakfast again",
       "localizations" : {
@@ -1038,6 +1217,28 @@
         }
       }
     },
+    "Search for Snap It." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "חפשו את Snap It."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Busca Snap It."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Найдите Snap It."
+          }
+        }
+      }
+    },
     "Sends to Coach" : {
       "localizations" : {
         "he" : {
@@ -1079,6 +1280,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Автоматически"
+          }
+        }
+      }
+    },
+    "Show me how" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "איך עושים את זה"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cómo hacerlo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показать как"
           }
         }
       }
@@ -1181,6 +1404,95 @@
         }
       }
     },
+    "Snap faster" : {
+      "comment" : "Tip title: Snap It, the photo logging camera, can be opened from outside the app",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "צילום מהיר יותר"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Captura más rápido"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Снимайте быстрее"
+          }
+        }
+      }
+    },
+    "Snap It shortcuts" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "קיצורי Snap It"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Atajos de Snap It"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Быстрый доступ к Snap It"
+          }
+        }
+      }
+    },
+    "Swipe down from the top-right corner." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "החליקו מטה מהפינה הימנית העליונה."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desliza hacia abajo desde la esquina superior derecha."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Смахните вниз от правого верхнего угла."
+          }
+        }
+      }
+    },
+    "Swipe to Controls and tap Choose a Control." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "החליקו אל ״פקדים״ והקישו על ״בחירת פקד״."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desliza hasta Controles y toca Elegir un control."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Смахните до пункта «Элементы управления» и нажмите «Выбрать элемент управления»."
+          }
+        }
+      }
+    },
     "Time zone" : {
       "comment" : "Settings section, row and screen title: the diary's time zone",
       "localizations" : {
@@ -1200,6 +1512,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Часовой пояс"
+          }
+        }
+      }
+    },
+    "Touch and hold an empty area, then tap Add a Control." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "געו נגיעה ארוכה באזור ריק ואז הקישו על ״הוספת פקד״."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantén pulsada una zona vacía y toca Añadir un control."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Коснитесь пустой области и удерживайте её, затем нажмите «Добавить элемент управления»."
+          }
+        }
+      }
+    },
+    "Touch and hold the Lock Screen and tap Customize. If asked, choose Lock Screen." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "געו נגיעה ארוכה במסך הנעילה והקישו על ״התאמה אישית״. אם תתבקשו, בחרו ״מסך הנעילה״."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantén pulsada la pantalla de bloqueo y toca Personalizar. Si te lo pide, elige Pantalla de bloqueo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Коснитесь экрана блокировки и удерживайте его, затем нажмите «Настроить». Если появится выбор, укажите «Экран блокировки»."
           }
         }
       }

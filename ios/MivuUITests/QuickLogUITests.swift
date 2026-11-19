@@ -80,4 +80,38 @@ import XCTest
         let selected = NSPredicate(format: "isSelected == true")
         XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: selected, object: coach)], timeout: 10), .completed)
     }
+
+    func testSnapItTipOpensShortcutStepsAlsoReachableFromSettings() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--proof-english", "--snap-it-tip"]
+        app.launch()
+        let how = app.buttons["Show me how"], snapIt = app.buttons["snapIt"], toast = app.buttons["quickLogAddNote"]
+        XCTAssertTrue(snapIt.waitForExistence(timeout: 15))
+        for log in 1...3 {
+            XCTAssertFalse(how.exists, "No tip before the third photo log (log \(log))")
+            snapIt.tap()
+            let photo = app.buttons["quickLogSyntheticPhoto"]
+            XCTAssertTrue(photo.waitForExistence(timeout: 10))
+            photo.tap()
+            XCTAssertTrue(toast.waitForExistence(timeout: 10))
+            // A log counts once its toast has run its course, so the tip never covers Add Note.
+            XCTAssertTrue(toast.waitForNonExistence(timeout: 10))
+        }
+        XCTAssertTrue(how.waitForExistence(timeout: 5), "The tip points at Snap It after the third log")
+        XCTAssertTrue(app.staticTexts["Add Snap It to your Lock Screen, Control Center or Action button."].exists)
+        how.tap()
+        for place in ["Lock Screen", "Control Center", "Action button"] {
+            XCTAssertTrue(app.staticTexts[place].waitForExistence(timeout: 5), "\(place) steps are listed")
+        }
+        app.buttons["doneSnapItShortcuts"].tap()
+        XCTAssertFalse(how.waitForExistence(timeout: 2), "The tip is gone once its steps were opened")
+        XCTAssertTrue(app.buttons["snapIt"].isHittable)
+        app.buttons["profileSettings"].tap()
+        let row = app.buttons["snapItShortcuts"]
+        // Settings is a lazy list; the Setup rows start below the fold.
+        if !row.waitForExistence(timeout: 3) { app.swipeUp() }
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.tap()
+        XCTAssertTrue(app.buttons["doneSnapItShortcuts"].waitForExistence(timeout: 5))
+    }
 }
