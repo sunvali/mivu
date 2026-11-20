@@ -93,6 +93,20 @@ import XCTest
         return app
     }
 
+    func testPipTeachesSwipeReplyUntilTheFirstReply() {
+        let app = launchHistory(extra: ["--coach-reply-tip"])
+        let tip = app.staticTexts["Swipe right on a message to reply."]
+        XCTAssertTrue(tip.waitForExistence(timeout: 5), "Pip names the gesture once there are messages to reply to")
+        let proof = XCTAttachment(screenshot: app.screenshot()); proof.name = "Pip reply tip"; proof.lifetime = .keepAlways; add(proof)
+        let row = viewport(app).coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.3))
+        row.press(forDuration: 0.05, thenDragTo: row.withOffset(CGVector(dx: 160, dy: 0)))
+        XCTAssertTrue(app.otherElements["coachReplyBar"].waitForExistence(timeout: 5))
+        app.buttons["coachReplyCancel"].tap()
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.tables["coachViewport"].waitForExistence(timeout: 15))
+        XCTAssertFalse(tip.waitForExistence(timeout: 3), "Someone who has replied needs no tip")
+    }
+
     private func launch() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture", "--proof-english"]

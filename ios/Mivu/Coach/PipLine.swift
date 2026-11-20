@@ -7,8 +7,10 @@ enum PipLine: Equatable {
     case problem(String, detail: String?, canRetry: Bool)
     case connect
 
+    static var replyTip: PipLine { .say(String(localized: "Swipe right on a message to reply.")) }
+
     static func current(hour: Int, mealsLogged: Bool, typing: Bool, connected: Bool, processing: Bool,
-                        withPhotos: Bool, recovery: Bool, error: String?, turnState: CoachTurnState?, chips: Bool = false) -> PipLine? {
+                        withPhotos: Bool, recovery: Bool, error: String?, turnState: CoachTurnState?, chips: Bool = false, tip: Bool = false) -> PipLine? {
         if recovery {
             switch turnState {
             case .waitingForConnection: return .connect
@@ -21,6 +23,8 @@ enum PipLine: Equatable {
         if processing { return .working(withPhotos ? String(localized: "Looking at your photo…") : String(localized: "Counting that up…")) }
         if !connected { return .connect }
         if typing { return nil }
+        // The swipe has no visible control, so Pip names it while he has nothing else to say.
+        if tip { return replyTip }
         // Beside the quick prompts Pip keeps to a short mood line, so the bubble never repeats the chips.
         if chips {
             if mealsLogged { return .say(String(localized: "Anything else?")) }

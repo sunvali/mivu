@@ -46,6 +46,9 @@ struct CoachView: View {
     @AppStorage("coachSuggestionsCollapsed", store: DiaryLaunch.defaults) private var suggestionsCollapsed = false
     /// Comma-joined chip IDs the person chose to hide.
     @AppStorage("coachHiddenSuggestions", store: DiaryLaunch.defaults) private var hiddenSuggestions = ""
+    /// Coach visits left on which Pip still mentions swipe-to-reply; zero once the user has replied.
+    @AppStorage("coachReplyTipLeft", store: DiaryLaunch.defaults) private var replyTipLeft = 3
+    @State private var replyTip: Bool?
     @State private var clockHour = Calendar.current.component(.hour, from: .now)
     @State private var windowHeight: CGFloat = 0
     @State private var promptsOverflow = false
@@ -201,6 +204,14 @@ struct CoachView: View {
             }
             #endif
         }
+        // Offered once per visit, when there are messages to reply to. A visit is spent only when Pip is free to say it,
+        // never behind a status or error line. VoiceOver replies from the message's actions instead.
+        .onChange(of: canTeachReply && pipLine(tip: true) == PipLine.replyTip, initial: true) { _, free in
+            guard free, replyTip == nil, replyTipLeft > 0,
+                  !DiaryLaunch.isUITest || CommandLine.arguments.contains("--coach-reply-tip") else { return }
+            replyTip = true; replyTipLeft -= 1
+        }
+        .onChange(of: coach.isSending) { _, sending in if sending, replyTip == true { replyTip = false } }
         .task(id: coach.diary.selection) { await coach.connectTimeline() }
         .task(id: receiptRefreshKey) { await coach.refreshLinks() }
         .task(id: navigationRequest?.requestID) {
@@ -423,11 +434,14 @@ struct CoachView: View {
         .onChange(of: companionProcessing) { _, working in if !working { sentWithPhotos = false } }
         .accessibilityElement(children: .contain).accessibilityIdentifier("coachCompanionStrip")
     }
-    private var pipLine: PipLine? {
+    private var pipLine: PipLine? { pipLine(tip: replyTip == true && canTeachReply) }
+    /// Checked while the tip shows too, so it never outlives a profile switch to an empty chat.
+    private var canTeachReply: Bool { (coach.timeline?.exchanges.count ?? 0) >= 3 && !UIAccessibility.isVoiceOverRunning }
+    private func pipLine(tip: Bool) -> PipLine? {
         let line = PipLine.current(hour: Calendar.current.component(.hour, from: .now), mealsLogged: !coach.diary.todaysMeals.isEmpty,
                                    typing: editing, connected: coach.connection.canInfer || DiaryLaunch.isCoachInferenceFixture,
                                    processing: companionProcessing, withPhotos: sentWithPhotos, recovery: companionRecovery,
-                                   error: coach.errorMessage, turnState: coach.companionTurn?.state, chips: showsQuickPromptRow && !suggestionsCollapsed)
+                                   error: coach.errorMessage, turnState: coach.companionTurn?.state, chips: showsQuickPromptRow && !suggestionsCollapsed, tip: tip)
         // At accessibility sizes the greeting would crowd the conversation; status and errors still show.
         if typeSize.isAccessibilitySize, case .say = line { return nil }
         return line
@@ -959,6 +973,8 @@ struct CoachView: View {
     }
     private func reply(to turn: CoachExchangeSummary, fromPip: Bool) {
         coach.reply(to: turn, fromPip: fromPip); editing = true
+        // Someone who has replied by swipe or menu needs no tip; Coach's own quotes do not count.
+        replyTip = false; replyTipLeft = 0
     }
     private func replyBar(_ reply: CoachReply) -> some View {
         HStack(spacing: 4) {

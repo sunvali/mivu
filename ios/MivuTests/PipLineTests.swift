@@ -4,9 +4,9 @@ import Testing
 struct PipLineTests {
     private func line(hour: Int = 12, mealsLogged: Bool = false, typing: Bool = false, connected: Bool = true,
                       processing: Bool = false, withPhotos: Bool = false, recovery: Bool = false,
-                      error: String? = nil, turnState: CoachTurnState? = nil, chips: Bool = false) -> PipLine? {
+                      error: String? = nil, turnState: CoachTurnState? = nil, chips: Bool = false, tip: Bool = false) -> PipLine? {
         PipLine.current(hour: hour, mealsLogged: mealsLogged, typing: typing, connected: connected, processing: processing,
-                        withPhotos: withPhotos, recovery: recovery, error: error, turnState: turnState, chips: chips)
+                        withPhotos: withPhotos, recovery: recovery, error: error, turnState: turnState, chips: chips, tip: tip)
     }
 
     @Test func chipsShortenOnlyTheIdleLine() {
@@ -18,6 +18,15 @@ struct PipLineTests {
         #expect(line(hour: 8, mealsLogged: true, chips: true) == .say("Anything else?"))
         #expect(line(processing: true, chips: true) == .working("Counting that up…"))
         #expect(line(connected: false, chips: true) == .connect)
+    }
+
+    @Test func replyTipTakesOnlyTheIdleLine() {
+        #expect(line(tip: true) == .say("Swipe right on a message to reply."))
+        #expect(line(mealsLogged: true, chips: true, tip: true) == .say("Swipe right on a message to reply."))
+        #expect(line(typing: true, tip: true) == nil)
+        #expect(line(processing: true, tip: true) == .working("Counting that up…"))
+        #expect(line(connected: false, tip: true) == .connect)
+        #expect(line(recovery: true, turnState: .needsRetry, tip: true) == .problem("That one didn’t go through.", detail: nil, canRetry: true))
     }
 
     @Test func idleFollowsTheTimeOfDayUntilSomethingIsLogged() {
