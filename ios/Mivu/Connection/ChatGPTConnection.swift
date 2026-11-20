@@ -334,7 +334,7 @@ final class ChatGPTConnection {
         let saved = choiceKey.flatMap { preferences.data(forKey: $0) }.flatMap { try? JSONDecoder().decode(ModelChoice.self, from: $0) }
         let result = ModelFamily.resolve(catalog, remembered: saved, defaultFamily: preferences.string(forKey: "coachModelFamily"))
         if saved != nil { remember(result.choice) }
-        if let from = result.upgradedFrom, let old = catalog.first(where: { $0.slug == from }), let new = catalog.first(where: { $0.slug == result.slug }) {
+        if provider == .chatGPT, let from = result.upgradedFrom, let old = catalog.first(where: { $0.slug == from }), let new = catalog.first(where: { $0.slug == result.slug }) {
             modelNotice = ModelNotice(kind: .upgraded, from: old.displayName, to: new.displayName, undoSlug: from)
         }
         selectedModel = result.slug

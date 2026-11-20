@@ -9,12 +9,12 @@ struct ModelChoice: Codable, Equatable, Sendable {
 }
 
 enum ModelFamily {
-    /// "GPT‑6.2 Sol" → ("sol", [6, 2]). A name in another shape returns nil and is never upgraded.
+    /// "GPT‑6.2 Sol" → ("sol", [6, 2]). Any other shape, a bare "GPT-6.2" too, returns nil and is never upgraded.
     static func parse(_ displayName: String) -> (family: String, version: [Int])? {
         let name = displayName.replacingOccurrences(of: "\u{2011}", with: "-").trimmingCharacters(in: .whitespaces)
-        guard let match = name.wholeMatch(of: /(?i)gpt-?(\d+(?:\.\d+)*)(?:\s+(.+))?/) else { return nil }
+        guard let match = name.wholeMatch(of: /(?i)gpt-?(\d+(?:\.\d+)*)\s+(.+)/) else { return nil }
         let version = match.1.split(separator: ".").compactMap { Int($0) }
-        return ((match.2.map(String.init) ?? "").lowercased(), version)
+        return (String(match.2).lowercased(), version)
     }
 
     struct Resolution: Equatable { let slug: String; let choice: ModelChoice?; let upgradedFrom: String? }

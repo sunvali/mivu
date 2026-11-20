@@ -12,7 +12,7 @@ struct ModelChoiceTests {
     @Test func parsesFamilyAndVersion() {
         #expect(ModelFamily.parse("GPT\u{2011}6.2 Sol")! == ("sol", [6, 2]))
         #expect(ModelFamily.parse("GPT-6.2 Sol Mini")! == ("sol mini", [6, 2]))
-        #expect(ModelFamily.parse("GPT-6.2")! == ("", [6, 2]))
+        #expect(ModelFamily.parse("GPT-6.2") == nil)
         #expect(ModelFamily.parse("o4-mini") == nil)
     }
 
@@ -56,6 +56,12 @@ struct ModelChoiceTests {
         let pinned = ModelChoice(slug: "o4-mini", family: nil)
         #expect(ModelFamily.resolve(catalog, remembered: pinned, defaultFamily: "Sol") == .init(slug: "o4-mini", choice: pinned, upgradedFrom: nil))
         #expect(ModelFamily.resolve(go, remembered: pinned, defaultFamily: nil) == .init(slug: "gpt-6.2-go", choice: nil, upgradedFrom: nil))
+    }
+
+    @Test func bareVersionNameIsPinned() {
+        let catalog = [model("GPT-6.2"), model("GPT-7")]
+        let pinned = ModelChoice(slug: "gpt-6.2", family: nil)
+        #expect(ModelFamily.resolve(catalog, remembered: pinned, defaultFamily: nil) == .init(slug: "gpt-6.2", choice: pinned, upgradedFrom: nil))
     }
 
     @Test func emptyCatalog() {

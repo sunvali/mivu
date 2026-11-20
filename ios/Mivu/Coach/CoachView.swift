@@ -491,54 +491,47 @@ struct CoachView: View {
             Menu { modelMenu } label: {
                 HStack(spacing: 4) {
                     Text(subtitle)
-                    Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).accessibilityHidden(true)
+                    Image(systemName: "chevron.down").font(.caption.weight(.semibold)).accessibilityHidden(true)
                 }
                 .font(.subheadline.weight(.medium)).foregroundStyle(Color.diaryAccent)
                 .frame(minHeight: 44).contentShape(Rectangle())
             }
             .accessibilityLabel(String(localized: "Coach model, \(subtitle)"))
-            .accessibilityHint(String(localized: "Choose who answers in Coach"))
             .accessibilityIdentifier("coachModelMenu")
+            .sensoryFeedback(.selection, trigger: subtitle)
         } else {
             Text(subtitle).font(.subheadline).foregroundStyle(Color.diarySecondary)
                 .accessibilityLabel(String(localized: "Coach model, \(subtitle)"))
         }
     }
 
+    /// A picker keeps the checkmark column, so checked and unchecked rows line up.
     @ViewBuilder private var modelMenu: some View {
         let connection = coach.connection
         let chatGPT = connection.planAuthorized ? connection.models : []
-        Group {
+        Picker("Coach model", selection: Binding(
+            get: { connection.provider == .apple ? CoachViewModel.appleModelKey : connection.selectedModel },
+            set: { pick in
+                if pick == CoachViewModel.appleModelKey { connection.chooseApple(); return }
+                // Only a different ChatGPT model restarts a reply that is under way.
+                let reanswering = coach.isWorking && connection.provider == .chatGPT && pick != connection.selectedModel
+                connection.choose(pick)
+                if reanswering { connection.noteReanswering() }
+            })) {
             if !chatGPT.isEmpty {
-                Section("ChatGPT") {
-                    ForEach(chatGPT, id: \.slug) { model in
-                        let current = connection.provider == .chatGPT && model.slug == connection.selectedModel
-                        Button {
-                            guard !current else { return }
-                            let busy = coach.isWorking
-                            connection.choose(model.slug)
-                            if busy { connection.noteReanswering() }
-                        } label: {
-                            if current { Label(model.displayName, systemImage: "checkmark") } else { Text(model.displayName) }
-                        }
-                    }
-                }
+                Section("ChatGPT") { ForEach(chatGPT, id: \.slug) { Text($0.displayName).tag($0.slug) } }
             }
             if connection.appleAvailable {
-                Section("On this iPhone") {
-                    Button { connection.chooseApple() } label: {
-                        if connection.provider == .apple { Label("Apple", systemImage: "checkmark") } else { Text("Apple") }
-                    }
-                }
+                Section("On this iPhone") { Text("Apple").tag(CoachViewModel.appleModelKey) }
             }
         }
+        .pickerStyle(.inline).labelsHidden()
     }
 
     @ViewBuilder private var modelNoticeBar: some View {
         if let notice = coach.connection.modelNotice {
             let text = switch notice.kind {
-            case .changed: String(localized: "Now using \(notice.to)")
-            case .upgraded: String(localized: "Now using \(notice.to) (was \(notice.from))")
+            case .changed, .upgraded: String(localized: "Now using \(notice.to) (was \(notice.from))")
             case .reanswering: String(localized: "Switched to \(notice.to) · answering again")
             }
             HStack(spacing: 4) {
@@ -551,11 +544,11 @@ struct CoachView: View {
                     .labelStyle(.iconOnly).foregroundStyle(Color.diarySecondary).frame(minWidth: 44, minHeight: 44)
             }
             .padding(.leading, 16).padding(.trailing, 4)
-            .background(Capsule().fill(Color.diarySummarySurface))
+            .background(RoundedRectangle(cornerRadius: 22).fill(Color.diarySummarySurface))
             .padding(.horizontal, 16)
             .transition(.opacity)
             .accessibilityElement(children: .contain).accessibilityIdentifier("modelNotice")
-            .onAppear { AccessibilityNotification.Announcement(text).post() }
+            .onChange(of: notice, initial: true) { AccessibilityNotification.Announcement(text).post() }
         }
     }
 

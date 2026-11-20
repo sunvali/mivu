@@ -33,7 +33,7 @@ private final class CoachNavigationReadFence: Sendable {
     private(set) var isSending = false
     private(set) var isWorking = false
     /// A switch asked for in chat; applied once that turn finishes, so the reply keeps the model it started with.
-    @ObservationIgnored private var pendingModel: String?
+    @ObservationIgnored private var pendingModel: (choice: String, account: String?)?
     private(set) var activity: CoachActivity?
     private(set) var activityTurnID: UUID?
     var errorMessage: String? {
@@ -511,6 +511,8 @@ private final class CoachNavigationReadFence: Sendable {
                             }, chooseModel: { name in
                                 await self.requestModel(name)
                             }).run(turnID: turn.id, expectedProfileID: owner)
+                            // The reply already says it switched, so apply it before anything can stop this pass; it restarts the worker.
+                            applyRequestedModel()
                         } catch {
                             guard !Task.isCancelled, diary.selection == selected else { break }
                             errorMessage = message(for: error)
@@ -524,8 +526,6 @@ private final class CoachNavigationReadFence: Sendable {
                             await diary.loadMeal(mealID)
                             if let meal = diary.meal(mealID) { MealNotification.post(meal) }
                         }
-                        // Last in the turn: the switch restarts this worker, as any model change does.
-                        applyRequestedModel()
                     }
                 } catch {
                     processingFailed = true
@@ -685,20 +685,22 @@ private final class CoachNavigationReadFence: Sendable {
             (try? JSONSerialization.data(withJSONObject: value, options: .sortedKeys)).map { String(decoding: $0, as: UTF8.self) } ?? "{}"
         }
         if connection.appleAvailable, name.trimmingCharacters(in: .whitespaces).lowercased().hasPrefix("apple") {
-            pendingModel = Self.appleModelKey
+            pendingModel = (Self.appleModelKey, connection.activeRegistrationID)
             return json(["changed": true, "model": "Apple, on this iPhone", "applies": "next message"])
         }
         guard connection.planAuthorized, let model = ModelFamily.match(name, in: connection.models) else {
             return json(["changed": false, "available": available])
         }
-        pendingModel = model.slug
+        pendingModel = (model.slug, connection.activeRegistrationID)
         return json(["changed": true, "model": model.displayName, "applies": "next message"])
     }
 
     private func applyRequestedModel() {
         guard let requested = pendingModel else { return }
         pendingModel = nil
-        if requested == Self.appleModelKey { connection.chooseApple(announce: true) } else { connection.choose(requested, announce: true) }
+        // A switch asked for under one account never lands on another.
+        guard requested.account == connection.activeRegistrationID else { return }
+        if requested.choice == Self.appleModelKey { connection.chooseApple(announce: true) } else { connection.choose(requested.choice, announce: true) }
     }
     // shortcut: session only, lost on relaunch; store with the turn if users miss the button.
     private var consultedByTurn: (turnID: UUID, items: [CoachConsulted])?
