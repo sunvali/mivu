@@ -96,6 +96,17 @@ import XCTest
         app.tabBars.buttons["Today"].tap()
         XCTAssertEqual(app.buttons.matching(identifier: "mealRow").count, today)
     }
+    func testDescribeBoxSendsTextToPip() {
+        let app = launch(["--coach-inference-fixture"])
+        app.buttons["addManually"].tap()
+        let describe = app.textFields["manualDescribe"]
+        XCTAssertTrue(describe.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["manualSnapIt"].exists)
+        describe.tap(); describe.typeText("Synthetic two eggs")
+        app.buttons["manualAskPip"].tap()
+        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Synthetic two eggs")).firstMatch.waitForExistence(timeout: 10))
+    }
     func testAmountPresetScalesNutritionAndRecentFoodRefills() {
         let app = launch()
         app.buttons["addManually"].tap()

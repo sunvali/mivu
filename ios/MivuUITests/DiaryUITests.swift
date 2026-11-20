@@ -18,6 +18,9 @@ import XCTest
         app.tabBars.buttons["Today"].tap()
         XCTAssertTrue(app.buttons["addManually"].waitForExistence(timeout: 5))
         XCTAssertGreaterThanOrEqual(app.buttons["addManually"].frame.height, 44)
+        // Pip leads; typing numbers is a quieter link under it.
+        XCTAssertGreaterThanOrEqual(app.buttons["addManually"].frame.minY, app.buttons["logMeal"].frame.maxY)
+        XCTAssertGreaterThan(app.buttons["logMeal"].frame.width, app.buttons["addManually"].frame.width)
         app.buttons["addManually"].tap()
         XCTAssertTrue(app.navigationBars["Enter nutrition"].waitForExistence(timeout: 5))
     }
@@ -42,6 +45,15 @@ import XCTest
         XCTAssertTrue(app.buttons["historyMeal"].firstMatch.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Monday, 12 October"].exists)
         XCTAssertTrue(app.buttons["diaryAskPip"].exists && app.buttons["diaryAddMenu"].isEnabled)
+    }
+
+    func testDayAddMenuLogsWithPipQuotingTheDay() {
+        let app = launchHistory()
+        XCTAssertTrue(app.selectDiaryDate("2026-10-12"))
+        app.buttons["diaryAddMenu"].tap()
+        let log = app.buttons["logWithPipForDay"]
+        XCTAssertTrue(log.waitForExistence(timeout: 5)); log.tap()
+        XCTAssertTrue(app.otherElements["coachReplyBar"].waitForExistence(timeout: 10))
     }
 
     func testCalendarJumpSelectsDate() {

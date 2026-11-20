@@ -141,6 +141,11 @@ struct HistoryView: View {
                     if model.sampleMode, let day = recordedDay, model.dayDetail(day.id) != nil {
                         Button("Log meal", systemImage: "plus.circle") { showMeal = true }.accessibilityIdentifier("logMealForDay")
                     }
+                    if !model.sampleMode {
+                        Button("Log with Pip", systemImage: "sparkles", action: askPipAction)
+                            .disabled(model.selection == nil || model.isChangingProfile || openChat.origin?.selection != model.selection)
+                            .accessibilityIdentifier("logWithPipForDay")
+                    }
                     Button("Enter nutrition manually", systemImage: "number") { showManualNutrition = true }.accessibilityIdentifier("enterNutritionForDay")
                     Button("Add weight manually", systemImage: "scalemass") { showWeight = true }.accessibilityIdentifier("logWeightForDay")
                     Button("Add workout manually", systemImage: "figure.strengthtraining.traditional") { showWorkout = true }.accessibilityIdentifier("logWorkoutForDay")
