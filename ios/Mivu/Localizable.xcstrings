@@ -27610,24 +27610,24 @@
         }
       }
     },
-    "Something went wrong. Your message is saved; tap Try again." : {
+    "Something went wrong. Your message is saved." : {
       "localizations" : {
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "משהו השתבש. ההודעה נשמרה; אפשר להקיש על “לנסות שוב”."
+            "value" : "משהו השתבש. ההודעה נשמרה."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Algo salió mal. Tu mensaje está guardado; toca Intentar de nuevo."
+            "value" : "Algo salió mal. Tu mensaje está guardado."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Что-то пошло не так. Твоё сообщение сохранено; коснись «Повторить»."
+            "value" : "Что-то пошло не так. Твоё сообщение сохранено."
           }
         }
       }

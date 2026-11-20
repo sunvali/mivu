@@ -25,6 +25,8 @@ final class DiaryDatabase {
             guard expectedFileIdentity == nil || openedFileIdentity == expectedFileIdentity else { throw DiaryError.persistenceFailed }
         }
         catch { sqlite3_close(connection); connection = nil; throw DiaryError.persistenceFailed }
+        // Reads open their own connection; wait out another connection's brief write lock rather than fail.
+        sqlite3_busy_timeout(connection, 5_000)
         do {
             try execute("PRAGMA foreign_keys = ON")
             try execute("PRAGMA journal_mode = DELETE")
