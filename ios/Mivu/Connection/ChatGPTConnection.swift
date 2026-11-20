@@ -27,6 +27,16 @@ enum ConnectionNotice: String {
     case unconfirmed = "Local credentials removed. Remote revocation unconfirmed."
 }
 
+/// A model change shown once in Coach; it is never saved to the diary.
+struct ModelNotice: Equatable {
+    enum Kind { case changed, upgraded, reanswering }
+    let kind: Kind
+    let from: String
+    let to: String
+    /// The ChatGPT model Undo returns to; nil when there is nothing to undo.
+    let undoSlug: String?
+}
+
 @Observable @MainActor
 final class ChatGPTConnection {
     private(set) var accountState: ProofState = .disconnected
@@ -34,6 +44,8 @@ final class ChatGPTConnection {
     private(set) var lastCompletedProbe: ProbeResult?
     private(set) var models: [AvailableModel] = []
     var selectedModel = ""
+    private(set) var modelNotice: ModelNotice?
+    var selectedModelName: String? { models.first { $0.slug == selectedModel }?.displayName }
     private(set) var job: ProbeJob?
     private(set) var notice: ConnectionNotice?
     private(set) var failureDiagnostic: ResponseFailureDiagnostic?
@@ -265,12 +277,67 @@ final class ChatGPTConnection {
             guard revision == generation else { return }
             let catalog = try await client.models(accessToken: token)
             guard revision == generation else { return }
-            models = catalog
-            if !catalog.contains(where: { $0.slug == selectedModel }) { selectedModel = catalog.first?.slug ?? "" }
+            adopt(catalog)
         } catch {
             guard revision == generation else { return }
             await reflectFailure(error, revision: revision)
         }
+    }
+
+    /// The person's pick: remembered for this account, and followed to newer versions of its family.
+    func choose(_ slug: String, announce: Bool = false) {
+        guard let model = models.first(where: { $0.slug == slug }) else { return }
+        let previous = provider == .chatGPT ? models.first { $0.slug == selectedModel } : nil
+        provider = .chatGPT
+        remember(ModelChoice(slug: slug, family: ModelFamily.parse(model.displayName)?.family))
+        selectedModel = slug
+        modelNotice = announce ? ModelNotice(kind: .changed, from: previous?.displayName ?? Self.appleName, to: model.displayName,
+                                             undoSlug: previous?.slug == slug ? nil : previous?.slug) : nil
+    }
+
+    static let appleName = String(localized: "Apple · on this iPhone")
+
+    func chooseApple(announce: Bool = false) {
+        guard appleAvailable else { return }
+        let previous = provider == .chatGPT ? selectedModelName : nil
+        provider = .apple
+        // Crossing providers has no Undo; the title menu switches back.
+        modelNotice = announce ? previous.map { ModelNotice(kind: .changed, from: $0, to: Self.appleName, undoSlug: nil) } : nil
+    }
+
+    /// After an upgrade, Undo holds the older version until a newer one than the declined appears.
+    func undoModelChange() {
+        defer { modelNotice = nil }
+        guard let notice = modelNotice, let slug = notice.undoSlug, let model = models.first(where: { $0.slug == slug }) else { return }
+        remember(ModelChoice(slug: slug, family: ModelFamily.parse(model.displayName)?.family,
+                             declinedSlug: notice.kind == .upgraded ? selectedModel : nil))
+        selectedModel = slug
+    }
+
+    func noteReanswering() {
+        if let name = selectedModelName { modelNotice = ModelNotice(kind: .reanswering, from: name, to: name, undoSlug: nil) }
+    }
+
+    func dismissModelNotice() { modelNotice = nil }
+
+    private var choiceKey: String? { activeRegistrationID.map { "modelChoice." + $0 } }
+
+    private func remember(_ choice: ModelChoice?) {
+        guard let choiceKey else { return }
+        if let choice, let data = try? JSONEncoder().encode(choice) { preferences.set(data, forKey: choiceKey) }
+        else { preferences.removeObject(forKey: choiceKey) }
+    }
+
+    /// shortcut: an upgrade found while Coach is answering re-answers like any switch; catalogs load at connect and launch, so it is rare.
+    private func adopt(_ catalog: [AvailableModel]) {
+        models = catalog
+        let saved = choiceKey.flatMap { preferences.data(forKey: $0) }.flatMap { try? JSONDecoder().decode(ModelChoice.self, from: $0) }
+        let result = ModelFamily.resolve(catalog, remembered: saved, defaultFamily: preferences.string(forKey: "coachModelFamily"))
+        if saved != nil { remember(result.choice) }
+        if let from = result.upgradedFrom, let old = catalog.first(where: { $0.slug == from }), let new = catalog.first(where: { $0.slug == result.slug }) {
+            modelNotice = ModelNotice(kind: .upgraded, from: old.displayName, to: new.displayName, undoSlug: from)
+        }
+        selectedModel = result.slug
     }
 
     /// One tiny request that tells whether OpenAI lets this account's plan be used here; temporary failures change nothing.
@@ -291,8 +358,7 @@ final class ChatGPTConnection {
             preferences.removeObject(forKey: "notEligibleRegistrationID")
             apply(await auth.snapshot())
             guard revision == generation, planAuthorized else { return }
-            models = catalog
-            if !catalog.contains(where: { $0.slug == selectedModel }) { selectedModel = catalog.first?.slug ?? "" }
+            adopt(catalog)
             resumePending()
         } catch ResponsesClient.Failure.notEligible {
             guard revision == generation else { return }

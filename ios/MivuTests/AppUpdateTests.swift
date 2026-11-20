@@ -129,6 +129,16 @@ private final class UpdateStub: URLProtocol, @unchecked Sendable {
         #expect(!app.isBlocked)
     }
 
+    @Test func storesCoachModelFamily() async {
+        let defaults = self.defaults()
+        await update(defaults: defaults, session: UpdateStub.session(config: (200, #"{"ios":"1.0","coachModelFamily":"Sol"}"#))).check(now: now)
+        #expect(defaults.string(forKey: "coachModelFamily") == "Sol")
+        await update(defaults: defaults, session: UpdateStub.session(config: (503, ""))).check(now: now)
+        #expect(defaults.string(forKey: "coachModelFamily") == "Sol")
+        await update(defaults: defaults, session: UpdateStub.session(config: (200, #"{"ios":"1.0"}"#))).check(now: now)
+        #expect(defaults.string(forKey: "coachModelFamily") == nil)
+    }
+
     @Test func checksAtMostOnceAnHour() async {
         let app = update(session: UpdateStub.session(config: (200, #"{"ios":"1.0.0"}"#)))
         await app.check(now: now)
