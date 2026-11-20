@@ -35482,7 +35482,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Что съесть?"
+            "value" : "Что поесть?"
           }
         }
       }
@@ -35499,13 +35499,13 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "¿Qué me conviene comer ahora? "
+            "value" : "¿Qué debería comer ahora? "
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Что лучше съесть дальше? "
+            "value" : "Что поесть дальше? "
           }
         }
       }
