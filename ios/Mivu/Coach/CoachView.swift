@@ -131,7 +131,7 @@ struct CoachView: View {
         .navigationTitle("Coach").toolbarTitleDisplayMode(.inlineLarge)
         .toolbar {
             // The large title itself cannot open a menu, so the model sits under it as its own control.
-            ToolbarItem(placement: .largeSubtitle) { AnyView(modelControl) }
+            if !modelSubtitle.isEmpty { ToolbarItem(placement: .largeSubtitle) { AnyView(modelControl) } }
             ToolbarItem(placement: .topBarLeading) {
                 Button("Chat history", systemImage: "clock.arrow.circlepath", action: openHistory)
                     .frame(minWidth: 44, minHeight: 44).accessibilityIdentifier("coachHistory")
@@ -485,9 +485,7 @@ struct CoachView: View {
         let connection = coach.connection
         let subtitle = modelSubtitle
         let choices = connection.coachModels.count
-        if subtitle.isEmpty {
-            EmptyView()
-        } else if choices > 1 {
+        if choices > 1 {
             Menu { modelMenu } label: {
                 HStack(spacing: 4) {
                     Text(subtitle)
