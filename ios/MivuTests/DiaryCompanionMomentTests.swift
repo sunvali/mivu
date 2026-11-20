@@ -106,4 +106,14 @@ import UIKit
         // Once the draft wraps, the caret starts the next line near the field's leading edge again.
         #expect(CompanionContext.caretSignal("Eggs and toast with butter and jam on the side, tea", width: 200, font: font) < longer)
     }
+
+    @Test func caretSignalFollowsRightToLeftText() {
+        let font = UIFont.systemFont(ofSize: 17)
+        // A Hebrew draft starts at the field's right edge and grows leftward, even in the English app.
+        let short = CompanionContext.caretSignal("ביצים", width: 200, font: font)
+        let longer = CompanionContext.caretSignal("ביצים וטוסט עם", width: 200, font: font)
+        #expect(short > 40 && longer < short)
+        // A Hebrew line that wraps starts again at the right.
+        #expect(CompanionContext.caretSignal("ביצים וטוסט עם חמאה וריבה בצד, וכוס תה", width: 200, font: font) > longer)
+    }
 }

@@ -91,12 +91,23 @@ struct CompanionContext {
     /// The caret's place across a field `width` wide, 0...60: where the draft's last wrapped line ends.
     static func caretSignal(_ text: String, width: CGFloat, font: UIFont) -> Int {
         guard width > 0, !text.isEmpty else { return 0 }
-        let storage = NSTextStorage(string: text, attributes: [.font: font])
+        // The field right-aligns a Hebrew or Arabic paragraph, even in the English app, and its caret then moves leftward.
+        let rightToLeft = startsRightToLeft(text.split(separator: "\n", omittingEmptySubsequences: false).last ?? "")
+        let style = NSMutableParagraphStyle()
+        style.alignment = rightToLeft ? .right : .left
+        style.baseWritingDirection = rightToLeft ? .rightToLeft : .leftToRight
+        let storage = NSTextStorage(string: text, attributes: [.font: font, .paragraphStyle: style])
         let layout = NSLayoutManager(), container = NSTextContainer(size: CGSize(width: width, height: .greatestFiniteMagnitude))
         container.lineFragmentPadding = 0
         layout.addTextContainer(container); storage.addLayoutManager(layout)
-        let end = layout.boundingRect(forGlyphRange: NSRange(location: layout.numberOfGlyphs - 1, length: 1), in: container).maxX
-        return draftSignal(Int((end / width * 60).rounded()))
+        let last = layout.boundingRect(forGlyphRange: NSRange(location: layout.numberOfGlyphs - 1, length: 1), in: container)
+        return draftSignal(Int(((rightToLeft ? last.minX : last.maxX) / width * 60).rounded()))
+    }
+
+    /// Unicode's paragraph rule: the first letter sets the direction. These blocks hold the right-to-left scripts.
+    private static func startsRightToLeft(_ paragraph: Substring) -> Bool {
+        guard let letter = paragraph.unicodeScalars.first(where: \.properties.isAlphabetic)?.value else { return false }
+        return (0x0590...0x08FF).contains(letter) || (0xFB1D...0xFDFF).contains(letter) || (0xFE70...0xFEFF).contains(letter)
     }
 }
 
