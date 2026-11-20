@@ -54,6 +54,7 @@ import XCTest
         let log = app.buttons["logWithPipForDay"]
         XCTAssertTrue(log.waitForExistence(timeout: 5)); log.tap()
         XCTAssertTrue(app.otherElements["coachReplyBar"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts["coachTimelineError"].waitForExistence(timeout: 3), "Logging opens the latest messages, not a jump to the day")
     }
 
     func testCalendarJumpSelectsDate() {
