@@ -21,6 +21,12 @@ private actor CoachFlowSuspension {
     }
 }
 
+private actor CoachFlowSwitch {
+    var on = false
+    func set() { on = true }
+}
+private struct SyntheticReloadFailure: Error {}
+
 private enum CoachFlowWaitFailure: Error, Equatable {
     case workerEndedBeforeInference(state: CoachTurnState?, message: String?)
     case inferenceStartTimedOut
@@ -503,5 +509,49 @@ extension CoachFlowTests {
             try await coach.captureExternal(profileID: UUID(), "Synthetic eggs", submissionID: UUID(), capturedAt: Date())
         }
         #expect(try await turns(diary).isEmpty)
+    }
+
+    /// A diary that loads until `failing` is on, then fails every reload, like a database hiccup while the app wakes.
+    private func failingReloadFixture(_ failing: CoachFlowSwitch) async throws -> (DiaryViewModel, URL) {
+        let path = URL.temporaryDirectory.appending(path: "CoachFlow-" + UUID().uuidString)
+        let store = DiaryStore(directory: path)
+        _ = try await store.createProfile(DiaryProfile(name: "Synthetic coach"))
+        let diary = DiaryViewModel(store: store, actionReadModelLoading: { id in
+            if await failing.on { throw SyntheticReloadFailure() }
+            return try await store.diaryReadModel(expectedProfileID: id)
+        })
+        await diary.load(createDefaultProfile: false)
+        return (diary, path)
+    }
+
+    @Test func reloadFailureAfterAnsweredTurnShowsNoError() async throws {
+        let failing = CoachFlowSwitch()
+        let (diary, path) = try await failingReloadFixture(failing); defer { try? FileManager.default.removeItem(at: path) }
+        let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(), inference: { { _, _ in
+            await failing.set()
+            return CoachInferenceResult(model: "fixture", text: "Synthetic guidance", calls: [], outputItems: [])
+        } })
+        coach.draft.text = "Synthetic question"
+        #expect(await coach.send())
+        await coach.waitForWorker()
+        #expect(try await turns(diary).first?.state == .completed)
+        #expect(coach.errorMessage == nil, "Nothing is left to retry, so no error may show")
+        #expect(!coach.companionNeedsRecovery)
+    }
+
+    @Test func reloadFailureBeforeProcessingOffersARealRetry() async throws {
+        let failing = CoachFlowSwitch()
+        let (diary, path) = try await failingReloadFixture(failing); defer { try? FileManager.default.removeItem(at: path) }
+        let coach = CoachViewModel(diary: diary, connection: ChatGPTConnection(), inference: { { _, _ in
+            CoachInferenceResult(model: "fixture", text: "Synthetic guidance", calls: [], outputItems: [])
+        } })
+        coach.enterBackground()
+        coach.draft.text = "Synthetic question"
+        #expect(await coach.send())
+        await failing.set()
+        coach.enterForeground()
+        await coach.waitForWorker()
+        #expect(try await turns(diary).first?.state == .needsRetry, "The waiting turn gets a Try again button")
+        #expect(coach.errorMessage != nil)
     }
 }

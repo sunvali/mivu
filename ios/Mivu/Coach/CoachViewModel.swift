@@ -521,7 +521,9 @@ private final class CoachNavigationReadFence: Sendable {
                 } catch {
                     processingFailed = true
                     CoachEngine.logger.error("Coach worker failed: \(CoachEngine.failureReason(error), privacy: .public)")
-                    if !Task.isCancelled, diary.selection == selected { errorMessage = message(for: error) }
+                    // A failure outside any turn (e.g. a reload after saved food) only shows when a waiting turn can retry.
+                    if unfinished == nil, let pending = diary.workStatus.pendingTurnID { unfinished = (pending, error) }
+                    if unfinished != nil, !Task.isCancelled, diary.selection == selected { errorMessage = message(for: error) }
                 }
                 if let unfinished, !Task.isCancelled, diary.selection == selected, !diary.isChangingProfile {
                     await settle(unfinished.turnID, after: unfinished.error, owner: owner)
@@ -540,8 +542,10 @@ private final class CoachNavigationReadFence: Sendable {
     /// saved-food summary or a Try again, never "Thinking…" with no way out.
     private func settle(_ turnID: UUID, after error: any Error, owner: UUID) async {
         let store = diary.store
-        guard let stored = try? await store.coachResult(turnID: turnID, expectedProfileID: owner),
-              [.captured, .analyzing].contains(stored.state) else { return }
+        guard let stored = try? await store.coachResult(turnID: turnID, expectedProfileID: owner) else { return }
+        // An answered turn has nothing to retry.
+        if stored.state == .completed { errorMessage = nil; return }
+        guard [.captured, .analyzing].contains(stored.state) else { return }
         // Saved food is never reported as a failure; the person can ask for the rest.
         if !stored.receipts.isEmpty, let text = try? await store.coachCommittedSummary(turnID: turnID, expectedProfileID: owner),
            (try? await store.completeCoachTurn(turnID: turnID, assistantText: text, incomplete: true, expectedProfileID: owner)) != nil {
