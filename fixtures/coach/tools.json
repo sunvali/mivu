@@ -47,7 +47,8 @@
               "day",
               "meal",
               "workout",
-              "confirm"
+              "confirm",
+              "model"
             ],
             "type" : "string"
           },
@@ -67,6 +68,24 @@
           "candidates",
           "kind",
           "options"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
+      "description" : "Switch which ChatGPT model answers from the next message on, only when the person asks to change models. Pass the model's name as they said it. If the result says changed false, call ask_clarification alone with kind model and options set to the available names it lists. Never claim a switch unless the result says changed true.",
+      "name" : "set_model",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "model" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "model"
         ],
         "type" : "object"
       },
