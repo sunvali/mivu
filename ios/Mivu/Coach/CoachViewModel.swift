@@ -828,7 +828,7 @@ private final class CoachNavigationReadFence: Sendable {
         if error as? DiaryError == .ambiguousDay { return String(localized: "Which day is this for?") }
         if error as? CoachError == .ungroundedConfirmation { return String(localized: "I need a little more detail to log that.") }
         if error as? DiaryError == .persistenceFailed { return String(localized: "Couldn't save that. Your message is kept; tap Try again.") }
-        return String(localized: "Something went wrong. Your message is saved; tap Try again.") }
+        return String(localized: "Something went wrong. Your message is saved.") }
 }
 
 @MainActor enum CoachCaptureProtection {
