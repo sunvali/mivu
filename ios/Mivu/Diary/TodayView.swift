@@ -398,7 +398,7 @@ struct DiaryRootView: View {
                 NavigationStack {
                     TodayView(model: model, companionOutput: output(for: .today), companionRuntime: companionRuntime,
                               onCompanionContextChanged: updateCompanionContext,
-                              onCompanionTouch: touchCompanion).zoneToastInset(model: model, toast: timeZoneToast)
+                              onCompanionTouch: touchCompanion, askPip: todayAskPip).zoneToastInset(model: model, toast: timeZoneToast)
                         .toolbar { profileControl }.duoReadableWidth()
                 }
                 .overlay(alignment: .bottom) { if let id = loggedMealID { quickLogToast(id) } }
@@ -547,6 +547,17 @@ struct DiaryRootView: View {
             return true
         }
     }
+    private var todayAskPip: ((String, UUID) async -> Bool)? {
+        connection.canInfer || DiaryLaunch.isCoachInferenceFixture ? { text, id in await askPip(text, submissionID: id) } : nil
+    }
+    /// The caller keeps one submission ID per text, so a retry after an uncertain save reconciles instead of logging twice.
+    private func askPip(_ text: String, submissionID: UUID) async -> Bool {
+        guard let selection = model.selection else { return false }
+        do { try await coach.captureExternal(profileID: selection.identity.profileID, text, submissionID: submissionID, capturedAt: Date()) }
+        catch { return false }
+        openCoachAction(nil, expectedSelection: selection)
+        return true
+    }
     private func openCoachHistory() {
         guard let origin = coachRoutes.origin(selection: model.selection, isChangingProfile: model.isChangingProfile) else { return }
         coachHistory = CoachHistoryPresentation(origin: origin, timeZoneID: model.readModel?.profile.timeZoneID ?? TimeZone.current.identifier)
@@ -689,6 +700,8 @@ struct TodayView: View {
     var onCompanionTouch: (CompanionTouch) -> Void = { _ in }
     /// Shown beside Coach: no capture bar, and the meal Coach just added or corrected lights up.
     var isLiveDay = false
+    /// Saves a description into Coach and opens it; nil when no model can analyze it.
+    var askPip: ((String, UUID) async -> Bool)? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -696,6 +709,7 @@ struct TodayView: View {
     @State private var mealRevisions: [UUID: Int]?
     @State private var changedMealID: UUID?
     @State private var showManualNutrition = false
+    @State private var snapAfterManual = false
     @State private var companionVisible = false
     @State private var surfaceVisible = false
     @State private var showingDetail = false
@@ -858,20 +872,23 @@ struct TodayView: View {
                     // Reuses the Shortcuts camera; disabled when it couldn't open now, so a tap never fires later.
                     DiaryCaptureAction { QuickLogRequest.shared.pending = true }
                         .disabled(model.selection == nil || model.isChangingProfile)
-                    let secondary = HStack(spacing: 8) {
-                        if model.sampleMode { DiaryManualAction(title: "Log meal", systemImage: "plus.circle.fill", identifier: "logMeal") { showComposer = true } }
-                        else { // shortcut: sample mode keeps MealComposerView because Coach has no sample analyzer, delete when sample mode goes or Coach gains one
-                            DiaryManualAction(title: "Chat with Pip", systemImage: "bubble.left.fill", identifier: "logMeal") {
-                                if let selection = model.selection { openChat(nil, expectedSelection: selection) }
-                            }
-                            .disabled(model.selection == nil || model.isChangingProfile)
-                            .accessibilityHint("Opens a chat where you can add photos and notes.")
-                            DiaryManualAction(identifier: "addManually") { showManualNutrition = true }
-                                .accessibilityHint("Opens a form to type in nutrition.")
+                    if model.sampleMode { DiaryManualAction(title: "Log meal", systemImage: "plus.circle.fill", identifier: "logMeal") { showComposer = true } }
+                    else { // shortcut: sample mode keeps MealComposerView because Coach has no sample analyzer, delete when sample mode goes or Coach gains one
+                        DiaryManualAction(title: "Chat with Pip", systemImage: "bubble.left.fill", identifier: "logMeal") {
+                            if let selection = model.selection { openChat(nil, expectedSelection: selection) }
                         }
+                        .disabled(model.selection == nil || model.isChangingProfile)
+                        .dynamicTypeSize(...DynamicTypeSize.accessibility2) // the bar must leave room for the day
+                        .accessibilityHint("Opens a chat where you can add photos and notes.")
+                        // Logging is text and photos first; typed numbers stay a quiet link.
+                        Button { showManualNutrition = true } label: {
+                            Text("Add manually").font(.subheadline.weight(.medium)).foregroundStyle(Color.diaryAccent)
+                                .frame(minWidth: 44, minHeight: 44).contentShape(.rect)
+                        }
+                            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                            .accessibilityHint("Opens a form to type in nutrition.")
+                            .accessibilityIdentifier("addManually")
                     }
-                    // Labelled, three stacked buttons fill half the screen at accessibility sizes; icons keep one row and still speak their titles.
-                    if typeSize.isAccessibilitySize { secondary.labelStyle(.iconOnly) } else { secondary }
                 }
                 // Sideways the bar would span the whole display; keep the buttons phone-sized.
                 .frame(maxWidth: isWide ? 560 : .infinity)
@@ -888,7 +905,12 @@ struct TodayView: View {
         .navigationTitle("Today")
         .toolbarTitleDisplayMode(.inlineLarge)
         .sheet(isPresented: $showComposer) { MealComposerView(model: model, onSaved: { savedMealID = $0 }) }
-        .sheet(isPresented: $showManualNutrition) { ManualNutritionView(model: model) { savedMealID = $0 } }
+        .sheet(isPresented: $showManualNutrition, onDismiss: {
+            // The camera opens only once the form has gone, so the two never stack.
+            if snapAfterManual { snapAfterManual = false; QuickLogRequest.shared.pending = true }
+        }) {
+            ManualNutritionView(model: model, askPip: askPip, onSnapIt: { snapAfterManual = true; showManualNutrition = false }) { savedMealID = $0 }
+        }
         .task(id: "\(model.activeDay?.id.uuidString ?? "")\(model.changeGeneration)") {
             // Coach may move the saved meal to the night before; keep its receipt readable once it leaves today.
             if let savedMealID, model.readModel?.meals.contains(where: { $0.id == savedMealID }) == false { await model.loadMeal(savedMealID) }

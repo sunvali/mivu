@@ -104,6 +104,9 @@ struct ManualNutritionView: View {
     @Bindable var model: DiaryViewModel
     var target: ManualNutritionTarget? = nil
     var appendingTo: MealReadModel? = nil
+    /// Offered above the numbers so describing stays the easy path; nil hides it.
+    var askPip: ((String, UUID) async -> Bool)? = nil
+    var onSnapIt: (() -> Void)? = nil
     var onSaved: (UUID) -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -115,12 +118,18 @@ struct ManualNutritionView: View {
     @State private var reconciledMealID: UUID?
     @State private var recentFoods: [FoodItem] = []
     @State private var chipTaps = 0
+    @State private var description = ""
+    @State private var askID = UUID()
+    @State private var asking = false
+    @State private var askFailed = false
+    @State private var snapAfterDiscard = false
     @FocusState private var editingField: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         NavigationStack {
             Form {
+                if let askPip { describeSection(askPip) }
                 Section("Food") {
                     TextField("Food name", text: $draft.name).font(.title2.weight(.semibold)).padding(.vertical, 8)
                         .focused($editingField, equals: "Name").accessibilityIdentifier("manualFoodName")
@@ -167,15 +176,16 @@ struct ManualNutritionView: View {
                 }
                 if let message { Section { Label(message, systemImage: "exclamationmark.circle").foregroundStyle(Color.diaryError) } }
             }
-            .disabled(saving)
+            .disabled(saving || asking)
+            .onChange(of: description) { _, _ in askID = UUID(); askFailed = false }
             .scrollContentBackground(.hidden).background(Color.diaryCanvas)
             .scrollDismissesKeyboard(.interactively).foregroundStyle(Color.diaryText).tint(.diaryAccent)
             .navigationTitle(appendingTo == nil ? "Enter nutrition" : "Add food manually").navigationBarTitleDisplayMode(.inline)
-            .interactiveDismissDisabled(draft.isDirty || saving)
+            .interactiveDismissDisabled(draft.isDirty || !description.isEmpty || saving || asking)
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { editingField = nil }.accessibilityIdentifier("doneManualNutrition") }
                 ToolbarItem(placement: .cancellationAction) {
-                    Button { editingField = nil; if draft.isDirty { showDiscard = true } else { dismiss() } } label: {
+                    Button { editingField = nil; if draft.isDirty || !description.isEmpty { showDiscard = true } else { dismiss() } } label: {
                         Text("Cancel").frame(minWidth: 44, minHeight: 44)
                     }.disabled(saving).accessibilityIdentifier("cancelManualNutrition")
                 }
@@ -187,8 +197,8 @@ struct ManualNutritionView: View {
                 }
             }
             .alert("Discard changes?", isPresented: $showDiscard) {
-                Button("Discard changes", role: .destructive) { dismiss() }
-                Button("Keep editing", role: .cancel) {}
+                Button("Discard changes", role: .destructive) { if snapAfterDiscard { onSnapIt?() } else { dismiss() } }
+                Button("Keep editing", role: .cancel) { snapAfterDiscard = false }
             } message: { Text("Your unsaved food and nutrition will be discarded.") }
             .sensoryFeedback(.impact(weight: .light), trigger: chipTaps)
             .sensoryFeedback(.selection, trigger: draft.unit)
@@ -297,6 +307,39 @@ struct ManualNutritionView: View {
         if let protein = grams[0] { HStack(spacing: 4) { dot(.diaryProtein); Text("Protein \(text(protein))") } }
         if let carbs = grams[1] { HStack(spacing: 4) { dot(.diaryCarbs); Text("Carbs \(text(carbs))") } }
         if let fat = grams[2] { HStack(spacing: 4) { dot(.diaryFat); Text("Fat \(text(fat))") } }
+    }
+    private var trimmedDescription: String { description.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private func describeSection(_ askPip: @escaping (String, UUID) async -> Bool) -> some View {
+        // At accessibility sizes the two buttons stack so their labels never break mid-word.
+        let row = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout())
+        return Section {
+            TextField("2 eggs and toast", text: $description, axis: .vertical).lineLimit(1...4)
+                .focused($editingField, equals: "Describe").frame(minHeight: 44).accessibilityLabel("Describe what you ate")
+                .accessibilityIdentifier("manualDescribe")
+            row {
+                if let onSnapIt {
+                    Button("Photo", systemImage: "camera") {
+                        if draft.isDirty || !description.isEmpty { snapAfterDiscard = true; showDiscard = true } else { onSnapIt() }
+                    }
+                    .buttonStyle(.borderless).foregroundStyle(Color.diaryAccent)
+                    .frame(minHeight: 44).accessibilityHint("Closes this form and opens Snap It.").accessibilityIdentifier("manualSnapIt")
+                }
+                Spacer(minLength: 0)
+                Button {
+                    Task {
+                        asking = true; askFailed = false
+                        if await askPip(trimmedDescription, askID) { dismiss() } else { askFailed = true }
+                        asking = false
+                    }
+                } label: { Label("Ask Pip", systemImage: "sparkles").foregroundStyle(Color.diaryActionText) }
+                    .buttonStyle(.borderedProminent).controlSize(.large).disabled(trimmedDescription.isEmpty || asking)
+                    .accessibilityIdentifier("manualAskPip")
+            }
+            .accessibilityElement(children: .contain)
+            if askFailed {
+                Label("Could not send to Pip. Your text is still here.", systemImage: "exclamationmark.circle").foregroundStyle(Color.diaryError)
+            }
+        } header: { Text("Easier: just describe it") } footer: { Text("Pip works out the nutrition. Know the exact numbers? Type them below.") }
     }
     private func numberField(_ title: String, text: Binding<String>, identifier: String) -> some View {
         Group {

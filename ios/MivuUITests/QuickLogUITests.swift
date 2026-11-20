@@ -41,7 +41,7 @@ import XCTest
         XCTAssertTrue(app.buttons["mealRow"].firstMatch.waitForExistence(timeout: 10))
     }
 
-    func testLargestTextPairsPipAndManualAsIconsUnderSnapIt() {
+    func testLargestTextStacksPipThenManualLinkUnderSnapIt() {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-navigation-start-today",
                                "--proof-english", "--proof-largest-text"]
@@ -49,7 +49,7 @@ import XCTest
         let snapIt = app.buttons["snapIt"], pip = app.buttons["logMeal"], manual = app.buttons["addManually"]
         XCTAssertTrue(snapIt.waitForExistence(timeout: 15))
         XCTAssertTrue(snapIt.isHittable)
-        XCTAssertEqual(pip.frame.midY, manual.frame.midY, accuracy: 2, "Icons share one row so the bar leaves room for the day")
+        XCTAssertLessThanOrEqual(pip.frame.maxY, manual.frame.minY, "Typing numbers is the quieter choice under Pip")
         XCTAssertLessThan(snapIt.frame.maxY, pip.frame.minY)
         XCTAssertEqual(pip.label, "Chat with Pip")
         XCTAssertEqual(manual.label, "Add manually")

@@ -35600,6 +35600,160 @@
           }
         }
       }
+    },
+    "Easier: just describe it" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Más fácil: solo descríbelo"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "קל יותר: פשוט לתאר"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проще: просто опиши"
+          }
+        }
+      }
+    },
+    "Log with Pip" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registrar con Pip"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רישום עם פיפ"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Записать с Пипом"
+          }
+        }
+      }
+    },
+    "Describe what you ate" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Describe lo que comiste"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לתאר מה אכלת"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Опиши свою еду"
+          }
+        }
+      }
+    },
+    "2 eggs and toast" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2 huevos y una tostada"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2 ביצים וטוסט"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2 яйца и тост"
+          }
+        }
+      }
+    },
+    "Could not send to Pip. Your text is still here." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo enviar a Pip. Tu texto sigue aquí."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לא ניתן לשלוח לפיפ. הטקסט שלך עדיין כאן."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось отправить Пипу. Текст сохранён."
+          }
+        }
+      }
+    },
+    "Closes this form and opens Snap It." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cierra este formulario y abre Snap It."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "סוגר את הטופס ופותח את Snap It."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Закрывает форму и открывает Snap It."
+          }
+        }
+      }
+    },
+    "Pip works out the nutrition. Know the exact numbers? Type them below." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pip calcula la nutrición. ¿Sabes los valores exactos? Escríbelos abajo."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פיפ מחשב את הערכים התזונתיים. יודעים את המספרים המדויקים? אפשר להקליד אותם למטה."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пип рассчитает питательность. Знаешь точные цифры? Введи их ниже."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

@@ -131,7 +131,7 @@ struct HistoryView: View {
                 }.accessibilityIdentifier("chooseDiaryDate")
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Ask Pip", systemImage: "sparkles", action: askPipAction)
+                Button("Ask Pip", systemImage: "sparkles") { askPipAction() }
                     .disabled(!weekLoaded || model.selection == nil || model.isChangingProfile || openChat.origin?.selection != model.selection)
                     .accessibilityIdentifier("diaryAskPip")
             }
@@ -140,6 +140,11 @@ struct HistoryView: View {
                     // The composer names its destination from the loaded day, so wait for it.
                     if model.sampleMode, let day = recordedDay, model.dayDetail(day.id) != nil {
                         Button("Log meal", systemImage: "plus.circle") { showMeal = true }.accessibilityIdentifier("logMealForDay")
+                    }
+                    if !model.sampleMode {
+                        Button("Log with Pip", systemImage: "sparkles") { askPipAction(seek: false) }
+                            .disabled(model.selection == nil || model.isChangingProfile || openChat.origin?.selection != model.selection)
+                            .accessibilityIdentifier("logWithPipForDay")
                     }
                     Button("Enter nutrition manually", systemImage: "number") { showManualNutrition = true }.accessibilityIdentifier("enterNutritionForDay")
                     Button("Add weight manually", systemImage: "scalemass") { showWeight = true }.accessibilityIdentifier("logWeightForDay")
@@ -166,11 +171,12 @@ struct HistoryView: View {
         }
     }
 
-    private func askPipAction() {
+    /// Logging stays at the latest messages; asking about the day jumps to its conversation.
+    private func askPipAction(seek: Bool = true) {
         guard let selection = model.selection else { return }
         if let day = recordedDay {
             let reply = CoachReply(target: .day(dayID: day.id), excerpt: DiaryWeek.format(day.localDate, "EEEE, d MMM"))
-            openChat(.day(day.id), reply: reply, expectedSelection: selection)
+            openChat(seek ? .day(day.id) : nil, reply: reply, expectedSelection: selection)
         } else {
             openChat(nil, draft: String(localized: "For \(DiaryWeek.format(selected, "EEEE, d MMM")): "), expectedSelection: selection)
         }
