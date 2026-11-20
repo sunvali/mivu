@@ -52,6 +52,19 @@ private actor Replies {
         #expect(page.exchanges.first { $0.id == turn.id }?.question == stored.question)
     }
 
+    @Test func portionQuestionAboutKnownRecordAsksHowMuch() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let meal = try #require(try await log(store, profile, "Popcorn").mealID)
+        let item = try #require(try await store.coachMeal(id: meal, expectedProfileID: profile.id).items.first?.id)
+        let turn = try await capturedTurn(store, text: "This bucket was full", photos: [], at: now, expectedProfileID: profile.id)
+        let args = #"{"kind":"portion","candidates":[{"meal_id":"\#(meal)","item_id":"\#(item)"}]}"#
+        let finished = try await run(store, profile, turn, [result([call("ask_clarification", args)])])
+        #expect(finished.assistantText == CoachClarification.portion.question)
+        let question = try #require(try await exportedTurn(store, turnID: turn.id, expectedProfileID: profile.id).question)
+        // The record still reaches the next turn as context, but there is no record to pick.
+        #expect(question.candidates == [.item(mealID: meal, itemID: item)] && !question.picksRecord)
+    }
+
     @Test func confirmUsesMealName() async throws {
         let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let meal = try #require(try await log(store, profile, "Snickers Minis").mealID)
