@@ -63,4 +63,51 @@ import Testing
         var draft = ManualNutritionDraft(); draft.name = "Synthetic food"; draft.kcal = "100"; draft.quantity = "100001"
         #expect(throws: DiaryError.invalidData) { try draft.item() }
     }
+    @Test func amountScalesKnownNutrientsWithoutDrift() {
+        var draft = ManualNutritionDraft()
+        #expect(draft.unit == "g" && draft.quantity == "100" && !draft.isDirty)
+        draft.name = "Synthetic yogurt"; draft.kcal = "120"; draft.fat = "12.4"; draft.protein = "0"
+        draft.setAmount("5")
+        #expect(draft.kcal == "6" && draft.fat == "0.6" && draft.protein == "0" && draft.carbs.isEmpty)
+        draft.setAmount("250")
+        #expect(draft.kcal == "300" && draft.fat == "31")
+        draft.setAmount("100")
+        #expect(draft.kcal == "120" && draft.fat == "12.4")
+        draft.setAmount("")
+        #expect(draft.kcal == "120" && draft.quantity.isEmpty)
+        draft.setAmount("200")
+        #expect(draft.kcal == "240")
+    }
+    @Test func typedNutrientIsForTheCurrentAmount() {
+        var draft = ManualNutritionDraft(); draft.name = "Synthetic oats"; draft.kcal = "100"
+        draft.setAmount("200"); #expect(draft.kcal == "200")
+        draft.kcal = "50"
+        draft.setAmount("400"); #expect(draft.kcal == "100")
+        draft.setAmount(""); draft.kcal = "60"
+        draft.setAmount("800"); #expect(draft.kcal == "120")
+    }
+    @Test func unitSwitchKeepsTotalsAndRebases() {
+        var draft = ManualNutritionDraft(); draft.name = "Synthetic bar"; draft.kcal = "120"
+        draft.setAmount("250"); #expect(draft.kcal == "300")
+        draft.setUnit("piece")
+        #expect(draft.unit == "piece" && draft.quantity == "1" && draft.kcal == "300")
+        draft.setAmount("2"); #expect(draft.kcal == "600")
+    }
+    @Test func recentFoodKeepsItsSourcesUntilEdited() throws {
+        let recent = FoodItem(name: "Synthetic rice", quantity: 150, unit: "g", nutrition: NutritionValues(kcal: 195, carbs: 42, protein: 4),
+            provenance: .estimate, reference: "Synthetic estimate", uncertain: true, nutrientSources: ["kcal": .estimate, "carbs": .identifiedSource])
+        var draft = ManualNutritionDraft(); draft.use(recent)
+        #expect(draft.name == "Synthetic rice" && draft.unit == "g" && draft.quantity == "150" && draft.kcal == "195")
+        draft.setAmount("300")
+        var item = try draft.item()
+        #expect(item.id != recent.id && item.nutrition.kcal == 390 && item.nutrition.carbs == 84 && item.nutrition.fat == nil)
+        #expect(item.nutrientSources == ["kcal": .estimate, "carbs": .identifiedSource, "protein": .estimate])
+        #expect(item.provenance == .estimate && item.reference == "Synthetic estimate" && item.uncertain)
+        draft.kcal = "400"
+        item = try draft.item()
+        #expect(item.nutrientSources["kcal"] == .user && item.nutrientSources["carbs"] == .identifiedSource)
+        draft.carbs = "80"; draft.protein = "9"
+        item = try draft.item()
+        #expect(item.provenance == .user && item.reference == "Entered manually" && !item.uncertain)
+    }
 }

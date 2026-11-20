@@ -66,6 +66,10 @@ actor DiaryStore {
         try validateOwnership(expectedSelection, profileID: expectedProfileID)
         return try pagedMutation(expectedProfileID) { try $0.saveManualNutrition(payload, expected: $1, maximumBytes: maximumFileBytes) }
     }
+    func recentFoods(expectedSelection: DiarySelectionOwnership, expectedProfileID: UUID) throws -> [FoodItem] {
+        try validateOwnership(expectedSelection, profileID: expectedProfileID)
+        return try pagedConnection(expectedProfileID: expectedProfileID).database.recentFoods(expectedProfileID: expectedProfileID)
+    }
     func manualNutritionResult(for payload: ManualNutritionPayload, expectedSelection: DiarySelectionOwnership,
                                expectedProfileID: UUID) throws -> ManualNutritionSaveResult? {
         try validateOwnership(expectedSelection, profileID: expectedProfileID)
