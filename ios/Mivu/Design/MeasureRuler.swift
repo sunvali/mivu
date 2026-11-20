@@ -17,6 +17,8 @@ struct MeasureRuler<Field: Hashable>: View {
     var formatted: ((Double) -> String)? = nil
     /// Steps between labelled marks; by default every whole unit for 0.1 steps, else every 10.
     var majorEvery: Int? = nil
+    /// Steps between haptic ticks while dragging, so fine rulers tick only on round values.
+    var feedbackEvery = 1
 
     @State private var index: Int?
     @State private var selection: TextSelection?
@@ -42,7 +44,8 @@ struct MeasureRuler<Field: Hashable>: View {
                         .keyboardType(step < 1 ? .decimalPad : .numberPad)
                         .focused(focus, equals: field)
                         .fixedSize()
-                        .frame(minWidth: 44, minHeight: 44)
+                        // Trailing keeps a one-digit number beside its unit while the target stays 44 points.
+                        .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
                         // Selecting the whole number on focus lets typing replace it, like a scale's display.
                         .onChange(of: focus.wrappedValue == field) { _, focused in
                             guard focused else { return }
@@ -85,7 +88,9 @@ struct MeasureRuler<Field: Hashable>: View {
             .onChange(of: index) { _, index in
                 if dragging, let index { write(value(at: index)) }
             }
-            .sensoryFeedback(.selection, trigger: index) { _, _ in dragging }
+            .sensoryFeedback(.selection, trigger: index) { _, new in
+                dragging && Int((value(at: new ?? 0) / step).rounded()) % feedbackEvery == 0
+            }
         }
         .frame(height: 64)
         // Numbers grow to the right on a scale in every language.

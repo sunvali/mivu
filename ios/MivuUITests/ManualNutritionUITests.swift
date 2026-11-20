@@ -96,6 +96,23 @@ import XCTest
         app.tabBars.buttons["Today"].tap()
         XCTAssertEqual(app.buttons.matching(identifier: "mealRow").count, today)
     }
+    func testAmountPresetScalesNutritionAndRecentFoodRefills() {
+        let app = launch()
+        app.buttons["addManually"].tap()
+        enter(app, name: "Synthetic yogurt", calories: "120")
+        let preset = app.buttons.matching(identifier: "manualPreset").element(boundBy: 3)
+        reveal(preset, in: app); XCTAssertEqual(preset.label, "200 g"); preset.tap()
+        let kcal = app.textFields["manualCalories"]; reveal(kcal, in: app)
+        XCTAssertEqual(kcal.value as? String, "240")
+        app.buttons["saveManualNutrition"].tap()
+        XCTAssertTrue(app.buttons["mealRow"].firstMatch.waitForExistence(timeout: 10))
+        app.buttons["addManually"].tap()
+        let recent = app.buttons["recentFood"].firstMatch
+        XCTAssertTrue(recent.waitForExistence(timeout: 5)); recent.tap()
+        XCTAssertEqual(app.textFields["manualFoodName"].value as? String, "Synthetic yogurt")
+        XCTAssertEqual(app.textFields["manualAmount"].value as? String, "200")
+        reveal(kcal, in: app); XCTAssertEqual(kcal.value as? String, "240")
+    }
     private func enter(_ app: XCUIApplication, name: String, calories: String) {
         let field = app.textFields["manualFoodName"]; XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.tap(); field.typeText(name)

@@ -27,6 +27,18 @@ import Testing
         #expect(try f.rows("SELECT portableBytes FROM storage_quota") == [[String(try JSONEncoder().encode(portable).count)]])
     }
 
+    @Test func recentFoodsAreNewestSavedItemsOncePerName() throws {
+        let f = try CaptureFixture(); defer { f.remove() }
+        let db = try DiaryDatabase(url: f.url)
+        func food(_ name: String, _ kcal: Double) -> FoodItem { FoodItem(name: name, quantity: 100, unit: "g", nutrition: NutritionValues(kcal: kcal), provenance: .user) }
+        _ = try save(db, f, manualPayload(f, items: [food("Synthetic oats", 1), food("Synthetic tea", 2)]))
+        _ = try save(db, f, manualPayload(f, items: [food("synthetic OATS ", 3), food("Synthetic milk", 4)]))
+        let recent = try db.recentFoods(expectedProfileID: f.profileID)
+        #expect(recent.map(\.name).prefix(3) == ["synthetic OATS ", "Synthetic milk", "Synthetic tea"])
+        #expect(recent.first?.nutrition.kcal == 3 && recent.count == 4)
+        #expect(try db.recentFoods(limit: 2, expectedProfileID: f.profileID).count == 2)
+    }
+
     @Test func newDayAndMealRollbackTogetherOnQuotaFailure() throws {
         let f = try CaptureFixture(); defer { f.remove() }
         let db = try DiaryDatabase(url: f.url)

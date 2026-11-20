@@ -1241,6 +1241,29 @@
         }
       }
     },
+    "Recent foods" : {
+      "comment" : "Label above chips of recently logged foods on the manual food entry screen",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comidas recientes"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מאכלים אחרונים"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Недавние продукты"
+          }
+        }
+      }
+    },
     "Remove one of the bottom buttons, then tap +." : {
       "localizations" : {
         "he" : {
@@ -1717,6 +1740,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Перейти на время: %@"
+          }
+        }
+      }
+    },
+    "Values from your earlier log keep their source until you change them. Leave unknown values blank; zero means a known zero." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los valores de tu registro anterior conservan su origen hasta que los cambies. Deja en blanco los valores desconocidos; cero significa un cero conocido."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ערכים מהרישום הקודם שומרים על המקור שלהם עד שמשנים אותם. ערכים לא ידועים אפשר להשאיר ריקים; 0 אומר שהערך ידוע והוא אפס."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Значения из прошлой записи сохраняют свой источник, пока ты их не изменишь. Неизвестные значения оставь пустыми; ноль значит, что значение точно равно нулю."
           }
         }
       }

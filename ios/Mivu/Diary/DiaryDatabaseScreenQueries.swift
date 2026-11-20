@@ -22,6 +22,22 @@ extension DiaryDatabase {
         guard profile.id == expectedProfileID else { throw DiaryError.wrongOwner }
         return profile
     }
+    /// Saved foods from the latest meals, newest first and once per name, for one-tap manual entry.
+    func recentFoods(limit: Int = 8, expectedProfileID: UUID) throws -> [FoodItem] {
+        try domainRead(expectedProfileID: expectedProfileID) { _ in
+            // Item rows hold committed values only; pending analysis lives in submissions.
+            let query = try domainStatement("SELECT i.payload FROM item i JOIN (SELECT id, ordinal FROM meal ORDER BY ordinal DESC, id DESC LIMIT 40) m ON m.id = i.parent ORDER BY m.ordinal DESC, m.id DESC, i.ordinal")
+            defer { sqlite3_finalize(query) }
+            var foods: [FoodItem] = [], names: Set<String> = []
+            while foods.count < limit, try mutationStep(query) {
+                let item = try JSONDecoder().decode(FoodItem.self, from: mutationBlob(query, 0)), n = item.nutrition
+                guard item.quantity > 0, [n.kcal, n.carbs, n.protein, n.fat].contains(where: { $0 != nil }),
+                      names.insert(item.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()).inserted else { continue }
+                foods.append(item)
+            }
+            return foods
+        }
+    }
     func coachWorkStatus(expectedProfileID: UUID) throws -> CoachWorkStatus {
         try domainRead(expectedProfileID: expectedProfileID) { _ in
             let pending = try domainStatement("SELECT turnID FROM coach_index WHERE state IN ('captured','analyzing','waitingForNetwork') ORDER BY sequence LIMIT 1")
