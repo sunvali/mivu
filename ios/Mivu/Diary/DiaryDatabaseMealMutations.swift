@@ -218,7 +218,7 @@ extension DiaryTransaction {
         defer { sqlite3_finalize(statement) }
         let source = try database.mutationStep(statement) ? database.mutationOptionalUUID(statement, 0) : nil
         return MealReadModel(id: id, dayID: meal.dayID, capturedAt: meal.capturedAt, eatenAt: meal.eatenAt, revision: meal.revision,
-            timePrecision: meal.timePrecision, timeZoneID: meal.timeZoneID, items: items, submissions: submissions, photos: photos, sourceTurnID: source)
+            timePrecision: meal.timePrecision, timeZoneID: meal.timeZoneID, items: items, submissions: submissions, photos: photos, sourceTurnID: source, title: meal.title)
     }
     func dayProjection(_ day: TrackingDay) throws -> DiaryDayReadModel {
         let meals = try records("meal", clause: "parent = ?", values: [.text(day.id.uuidString)]).map { row -> MealReadModel in

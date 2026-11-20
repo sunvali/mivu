@@ -193,6 +193,7 @@ import XCTest
         XCTAssertTrue(app.staticTexts["coachFixtureBanner"].waitForExistence(timeout: 5))
         waitForReply(to: "Two eggs, three bread slices and salad", in: app)
         openLatestMeal(in: app)
+        XCTAssertTrue(app.staticTexts["Egg breakfast"].firstMatch.exists, "A mixed meal shows its Coach title")
         for food in ["Eggs", "Bread", "Salad"] { revealMealDetailItem(app.staticTexts[food].firstMatch, in: app) }
         revealMealDetailItem(app.staticTexts["3 slice"], in: app)
         revealList(app.buttons["viewMealPhoto"].firstMatch, in: app)

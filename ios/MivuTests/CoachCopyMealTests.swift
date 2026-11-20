@@ -16,7 +16,7 @@ import Testing
     }
 
     @Test func copyMealCopiesItemsWithNewIDs() throws {
-        guard case .write(.food(let date, let items, let eatenAt, let reviewFirst)) = try CoachTools.parse(call(args()), meals: [source], evidence: [:], receipts: [])
+        guard case .write(.food(let date, let items, let eatenAt, let reviewFirst, _)) = try CoachTools.parse(call(args()), meals: [source], evidence: [:], receipts: [])
         else { Issue.record("copy_meal must write food"); return }
         #expect(date == "2027-03-02" && eatenAt == nil && !reviewFirst)
         #expect(items.map(\.name) == ["Oats", "Coffee"] && items.map(\.quantity) == [1, 1] && items.map(\.unit) == ["bowl", "cup"])
@@ -30,8 +30,8 @@ import Testing
     }
 
     @Test func copyMealKeepsEatenAtRules() throws {
-        guard case .write(.food(_, _, let other, _)) = try CoachTools.parse(call(args(eatenAt: "2027-02-20 08:00")), meals: [source], evidence: [:], receipts: [], zone: "UTC"),
-              case .write(.food(_, _, let same, _)) = try CoachTools.parse(call(args(eatenAt: "2027-03-02 08:00")), meals: [source], evidence: [:], receipts: [], zone: "UTC")
+        guard case .write(.food(_, _, let other, _, _)) = try CoachTools.parse(call(args(eatenAt: "2027-02-20 08:00")), meals: [source], evidence: [:], receipts: [], zone: "UTC"),
+              case .write(.food(_, _, let same, _, _)) = try CoachTools.parse(call(args(eatenAt: "2027-03-02 08:00")), meals: [source], evidence: [:], receipts: [], zone: "UTC")
         else { Issue.record("copy_meal must write food"); return }
         #expect(other == nil)
         #expect(same == diaryLocalInstant("2027-03-02 08:00", zone: "UTC"))

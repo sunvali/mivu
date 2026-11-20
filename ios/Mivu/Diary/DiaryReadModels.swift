@@ -53,6 +53,8 @@ struct MealReadModel: Equatable, Sendable, Identifiable {
     var submissions: [MealSubmission]
     var photos: [DiaryPhotoReference]
     var sourceTurnID: UUID?
+    var title: MealTitle? = nil
+    var displayTitle: String { mealTitle(items: items, title: title, note: submissions.first?.text ?? "") }
     var totals: NutritionTotals { nutritionTotals(items) }
     var isSaved: Bool { revision > 0 }
     var state: SubmissionState { submissions.last?.state ?? .saved }

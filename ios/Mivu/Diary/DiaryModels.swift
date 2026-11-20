@@ -158,6 +158,8 @@ struct DiaryMeal: Codable, Equatable, Sendable, Identifiable {
     var timePrecision: MealTimePrecision? = nil
     /// The zone where the meal was eaten; nil on payloads saved before time zone travel (the day's zone applies).
     var timeZoneID: String? = nil
+    /// The Coach's name for a mixed meal; nil on meals saved before titles or never titled.
+    var title: MealTitle? = nil
     var items: [FoodItem] = []
     var photos: [MealPhoto] = []
     var submissions: [MealSubmission] = []
@@ -168,6 +170,25 @@ struct DiaryMeal: Codable, Equatable, Sendable, Identifiable {
         (!isSaved && submissions.isEmpty)
             || submissions.contains { $0.state != .saved && $0.state != .cancelled }
     }
+}
+
+/// A meal name plus the foods it described, so adding or removing a food anywhere drops a stale name.
+struct MealTitle: Codable, Equatable, Sendable {
+    var text: String
+    var foods: [String]
+    init(text: String, foods: [String]) { self.text = text; self.foods = foods.map(Self.key).sorted() }
+    func names(_ items: [FoodItem]) -> Bool { foods == items.map { Self.key($0.name) }.sorted() }
+    private static func key(_ name: String) -> String { name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+}
+
+/// One food keeps its name; several use the Coach title while it still fits, else the first two names and a count.
+func mealTitle(items: [FoodItem], title: MealTitle?, note: String) -> String {
+    func name(_ item: FoodItem) -> String { item.provenance == .sample ? String(localized: "Apple (sample)") : item.name }
+    if items.count > 1, let title, title.names(items) { return title.text }
+    if items.count > 2 { return "\(items.prefix(2).map(name).joined(separator: ", ")) +\(items.count - 2)" }
+    if !items.isEmpty { return items.map(name).joined(separator: ", ") }
+    let note = note.trimmingCharacters(in: .whitespacesAndNewlines)
+    return note.isEmpty ? String(localized: "Meal") : note
 }
 
 struct WeightEntry: Codable, Equatable, Sendable, Identifiable {

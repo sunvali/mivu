@@ -16,7 +16,8 @@ extension CoachWrite {
         }
         var payload: [String: Any] = ["domain": "mivu.coach.command.v1", "target": target]
         switch self {
-        case .food(let date, let items, let time, let review): payload["arguments"] = ["date": date, "items": try foods(items), "time": nullable(time?.timeIntervalSinceReferenceDate), "review": review]
+        // A meal title is a label like estimatedBy: a reworded retry must match its receipt.
+        case .food(let date, let items, let time, let review, _): payload["arguments"] = ["date": date, "items": try foods(items), "time": nullable(time?.timeIntervalSinceReferenceDate), "review": review]
         case .correction(_, let item, let revision):
             // correct_item supplies quantity only; copied live nutrition is grounding, not new intent.
             payload["arguments"] = ["quantity": item.quantity, "revision": revision]
@@ -29,15 +30,15 @@ extension CoachWrite {
         case .manual(let edit, let patchKey):
             var arguments: [String: Any] = [:]
             switch edit {
-            case .item(_, let item, let revision, let submission, let explicitNutrients, let original):
+            case .item(_, let item, let revision, let submission, let explicitNutrients, let original, _):
                 arguments = ["revision": revision, "submission": nullable(submission?.uuidString)]
                 if item.name != original.name { arguments["name"] = item.name }
                 if item.unit != original.unit { arguments["unit"] = item.unit }
                 if item.quantity != original.quantity { arguments["quantity"] = item.quantity }
                 for (key, field) in [("kcal", \NutritionValues.kcal), ("carbs", \NutritionValues.carbs), ("protein", \NutritionValues.protein), ("fat", \NutritionValues.fat)] where explicitNutrients.contains(key) { arguments[key] = nullable(item.nutrition[keyPath: field]) }
-            case .append(_, let items, let revision): arguments = ["items": try foods(items), "revision": revision]
+            case .append(_, let items, let revision, _): arguments = ["items": try foods(items), "revision": revision]
             case .accept(_, _, let revision), .deleteMeal(_, let revision), .deletePhoto(_, _, let revision), .retry(_, let revision), .startDay(let revision): arguments = ["revision": revision]
-            case .deleteItem(_, let item, let revision): arguments = ["item": item.uuidString, "revision": revision]
+            case .deleteItem(_, let item, let revision, _): arguments = ["item": item.uuidString, "revision": revision]
             case .scaleMeal(_, let target, let revision): arguments = ["target": target, "revision": revision]
             case .move(_, let date, let revision, _): arguments = ["date": date, "revision": revision]
             case .attach(_, let ids, let role, let revision): arguments = ["photos": ids.map(\.uuidString).sorted(), "role": role.rawValue, "revision": revision]

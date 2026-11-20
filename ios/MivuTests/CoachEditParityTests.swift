@@ -35,7 +35,7 @@ import Testing
         let args: [String: Any] = ["meal_id": meal.id.uuidString, "item_id": item.id.uuidString, "expected_revision": 1, "quantity": 4,
                                  "nutrients": [["nutrient": "kcal", "value": 160], ["nutrient": "carbs", "value": NSNull()]]]
         let call = CoachToolCall(id: "intent", callID: "intent", name: "edit_item", namespace: "mivu", arguments: String(decoding: try JSONSerialization.data(withJSONObject: args), as: UTF8.self))
-        guard case .write(.manual(.item(_, let edited, _, _, let explicit, let original), _)) = try CoachTools.parse(call, meals: [meal], evidence: [:], receipts: []) else { Issue.record("Expected item edit"); return }
+        guard case .write(.manual(.item(_, let edited, _, _, let explicit, let original, _), _)) = try CoachTools.parse(call, meals: [meal], evidence: [:], receipts: []) else { Issue.record("Expected item edit"); return }
         let result = try diaryCorrectedItem(edited, previous: original, explicitNutrients: explicit)
         #expect(result.nutrition.kcal == 160 && result.nutrition.carbs == nil && result.nutrition.protein == 40)
     }

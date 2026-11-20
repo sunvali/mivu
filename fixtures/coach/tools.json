@@ -600,6 +600,13 @@
             },
             "type" : "array"
           },
+          "meal_title" : {
+            "description" : "When the meal has 2 or more foods after this call, a short name for the whole meal in the app language, 2 to 4 words, as a person would call it (Chicken and rice, Shakshuka with bread); no amounts, calories or emoji. Null for one food.",
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
           "review_first" : {
             "type" : [
               "boolean",
@@ -613,6 +620,7 @@
         "required" : [
           "eaten_at",
           "items",
+          "meal_title",
           "review_first",
           "target_local_date"
         ],
@@ -700,6 +708,13 @@
           "meal_id" : {
             "type" : "string"
           },
+          "meal_title" : {
+            "description" : "When the meal has 2 or more foods after this call, a short name for the whole meal in the app language, 2 to 4 words, as a person would call it (Chicken and rice, Shakshuka with bread); no amounts, calories or emoji. Null for one food.",
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
           "name" : {
             "type" : [
               "string",
@@ -760,6 +775,7 @@
           "expected_revision",
           "item_id",
           "meal_id",
+          "meal_title",
           "name",
           "nutrients",
           "quantity",
@@ -848,12 +864,20 @@
           },
           "meal_id" : {
             "type" : "string"
+          },
+          "meal_title" : {
+            "description" : "When the meal has 2 or more foods after this call, a short name for the whole meal in the app language, 2 to 4 words, as a person would call it (Chicken and rice, Shakshuka with bread); no amounts, calories or emoji. Null for one food.",
+            "type" : [
+              "string",
+              "null"
+            ]
           }
         },
         "required" : [
           "expected_revision",
           "items",
-          "meal_id"
+          "meal_id",
+          "meal_title"
         ],
         "type" : "object"
       },
@@ -948,12 +972,20 @@
           },
           "meal_id" : {
             "type" : "string"
+          },
+          "meal_title" : {
+            "description" : "When the meal has 2 or more foods after this call, a short name for the whole meal in the app language, 2 to 4 words, as a person would call it (Chicken and rice, Shakshuka with bread); no amounts, calories or emoji. Null for one food.",
+            "type" : [
+              "string",
+              "null"
+            ]
           }
         },
         "required" : [
           "expected_revision",
           "item_id",
-          "meal_id"
+          "meal_id",
+          "meal_title"
         ],
         "type" : "object"
       },
