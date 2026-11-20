@@ -206,18 +206,19 @@ import Testing
         #expect(fixture.connection.modelNotice == ModelNotice(kind: .changed, from: "Synthetic", to: "Second synthetic", undoSlug: "fixture-model"))
     }
 
-    /// Someone who chose ChatGPT is never offered Apple's on-device model.
+    /// Coach lists only the models of the Coach AI chosen in Settings, never the other provider's.
     @Test func chatGPTCoachNeverSuggestsApple() async throws {
         let fixture = try CoachConnectionFixture(appleAvailable: true, response: coachConnectionTextCompletion)
         defer { fixture.cleanup() }
         await fixture.connection.restore()
         #expect(fixture.connection.provider == .chatGPT)
-        #expect(!fixture.connection.offersApple)
+        #expect(fixture.connection.coachModels.map(\.slug) == ["fixture-model", "second-model"])
         let diary = DiaryViewModel(store: DiaryStore(directory: fixture.directory.appending(path: "Diary")))
         let coach = CoachViewModel(diary: diary, connection: fixture.connection, sleep: { _ in })
         #expect(!coach.requestModel("the smarter one").contains("Apple"))
-        fixture.connection.chooseApple()
-        #expect(fixture.connection.offersApple)
+        // Apple chosen in Settings: Coach offers no ChatGPT models either.
+        fixture.connection.provider = .apple
+        #expect(fixture.connection.coachModels.isEmpty)
     }
 
     @Test func profileChangeDuringUsageRetryDelayStopsBeforeAnotherRequest() async throws {

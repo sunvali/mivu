@@ -484,7 +484,7 @@ struct CoachView: View {
     @ViewBuilder private var modelControl: some View {
         let connection = coach.connection
         let subtitle = modelSubtitle
-        let choices = (connection.planAuthorized ? connection.models.count : 0) + (connection.offersApple ? 1 : 0)
+        let choices = connection.coachModels.count
         if subtitle.isEmpty {
             EmptyView()
         } else if choices > 1 {
@@ -506,24 +506,18 @@ struct CoachView: View {
     }
 
     /// A picker keeps the checkmark column, so checked and unchecked rows line up.
+    /// Apple and ChatGPT are chosen in Settings; this lists only the chosen ChatGPT plan's models.
     @ViewBuilder private var modelMenu: some View {
         let connection = coach.connection
-        let chatGPT = connection.planAuthorized ? connection.models : []
         Picker("Coach model", selection: Binding(
-            get: { connection.provider == .apple ? CoachViewModel.appleModelKey : connection.selectedModel },
+            get: { connection.selectedModel },
             set: { pick in
-                if pick == CoachViewModel.appleModelKey { connection.chooseApple(); return }
-                // Only a different ChatGPT model restarts a reply that is under way.
-                let reanswering = coach.isWorking && connection.provider == .chatGPT && pick != connection.selectedModel
+                // A reply under way is answered again with the new model.
+                let reanswering = coach.isWorking && pick != connection.selectedModel
                 connection.choose(pick)
                 if reanswering { connection.noteReanswering() }
             })) {
-            if !chatGPT.isEmpty {
-                Section("ChatGPT") { ForEach(chatGPT, id: \.slug) { Text($0.displayName).tag($0.slug) } }
-            }
-            if connection.offersApple {
-                Section("On this iPhone") { Text("Apple").tag(CoachViewModel.appleModelKey) }
-            }
+            Section("ChatGPT") { ForEach(connection.coachModels, id: \.slug) { Text($0.displayName).tag($0.slug) } }
         }
         .pickerStyle(.inline).labelsHidden()
     }

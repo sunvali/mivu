@@ -41,12 +41,9 @@ Mivu is AI-first, so anything that can be done by hand must also be doable by as
 - When ChatGPT is not connected, or the model list fails to load or is empty, the line is hidden and the title area looks
   the way it does today.
 - When the plan offers exactly one model, show its name without ▾ and without a menu.
-- **Apple on-device provider.** Never suggested to someone using ChatGPT Coach (owner, 2026-11-20): neither the menu nor
-  Coach's clarification choices list Apple then. Someone already on Apple sees an "On this iPhone · Apple" section below
-  the ChatGPT models. It
-  sets `ChatGPTConnection.provider`, the same setting Settings uses. While Apple is the provider, the title shows
-  "Apple · on this iPhone". The menu also appears when Apple is the only option (ChatGPT not connected but Apple
-  available), so people can see who is answering. With neither available, the line is hidden.
+- **Apple on-device provider** (owner, 2026-11-20). The menu lists only the models of the Coach AI chosen in Settings.
+  On ChatGPT it never offers Apple; on Apple Intelligence the title shows "Apple · on this iPhone" with no menu and no
+  ChatGPT models. Switching between Apple and ChatGPT stays in Settings.
 
 ### History
 - The person's words and Coach's reply text are saved in history like any other exchange. The "Model changed" card
