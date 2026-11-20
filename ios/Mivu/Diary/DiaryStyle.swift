@@ -295,10 +295,7 @@ struct MealRow: View {
     var model: DiaryViewModel? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .body) private var thumbnail = 56.0
-    private var title: String {
-        let text = meal.submissions.first?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return meal.items.first.map { $0.provenance == .sample ? "Apple (sample)" : $0.name } ?? (text.isEmpty ? String(localized: "Meal") : text)
-    }
+    private var title: String { meal.displayTitle }
     private var needsReview: Bool { meal.state == .awaitingReview }
     private var statusText: Text {
         let time = meal.timePrecision == .dateOnly ? Text("Time unspecified") : MealClock.text(MealClock.label(meal))
@@ -324,6 +321,7 @@ struct MealRow: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Text(title).font(.body.weight(.semibold)).foregroundStyle(Color.diaryText).lineLimit(typeSize.isAccessibilitySize ? nil : 2).directionFromContent(title)
+                    .accessibilityLabel(meal.spokenTitle)
                 if needsReview { Circle().fill(Color.diaryWarning).frame(width: 8, height: 8).accessibilityHidden(true) }
             }
             Group { if let spokenStatus { statusText.accessibilityLabel(spokenStatus) } else { statusText } }

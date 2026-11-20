@@ -89,7 +89,7 @@ enum CoachUITestInference {
                          ["name":"Bread", "quantity":3, "unit":"slice", "kcal":240, "carbs":45, "protein":9, "fat":3],
                          ["name":"Salad", "quantity":1, "unit":"bowl", "kcal":40, "carbs":8, "protein":1, "fat":0]]
             }
-            name = "log_food"; arguments = ["target_local_date": localDate, "items": items, "review_first": reviewFirst]
+            name = "log_food"; arguments = ["target_local_date": localDate, "items": items, "review_first": reviewFirst, "meal_title": items.count > 1 ? "Egg breakfast" : NSNull()]
         }
         let argumentsJSON = String(data: try JSONSerialization.data(withJSONObject: arguments, options: .sortedKeys), encoding: .utf8)!
         let id = UUID().uuidString
