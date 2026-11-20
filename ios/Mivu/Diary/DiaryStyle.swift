@@ -321,6 +321,7 @@ struct MealRow: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Text(title).font(.body.weight(.semibold)).foregroundStyle(Color.diaryText).lineLimit(typeSize.isAccessibilitySize ? nil : 2).directionFromContent(title)
+                    .accessibilityLabel(meal.spokenTitle)
                 if needsReview { Circle().fill(Color.diaryWarning).frame(width: 8, height: 8).accessibilityHidden(true) }
             }
             Group { if let spokenStatus { statusText.accessibilityLabel(spokenStatus) } else { statusText } }

@@ -251,6 +251,7 @@ extension DiaryTransaction {
         let result = previous + items; try validateItems(result); return result
     }
     /// Names the meal for its foods as they stand after this write, including foods still awaiting review.
+    // shortcut: Coach undo restores items only, so an undone retitle shows the food names; store the title in coach_undo if owners miss it.
     private func titleMeal(_ id: UUID, _ text: String?) throws {
         guard let text else { return }
         var meal = try mealRecord(id: id)

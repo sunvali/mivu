@@ -182,10 +182,14 @@ struct MealTitle: Codable, Equatable, Sendable {
 }
 
 /// One food keeps its name; several use the Coach title while it still fits, else the first two names and a count.
-func mealTitle(items: [FoodItem], title: MealTitle?, note: String) -> String {
+/// `spoken` says the count in words, since VoiceOver reads "+2" as "plus 2".
+func mealTitle(items: [FoodItem], title: MealTitle?, note: String, spoken: Bool = false) -> String {
     func name(_ item: FoodItem) -> String { item.provenance == .sample ? String(localized: "Apple (sample)") : item.name }
     if items.count > 1, let title, title.names(items) { return title.text }
-    if items.count > 2 { return "\(items.prefix(2).map(name).joined(separator: ", ")) +\(items.count - 2)" }
+    if items.count > 2 {
+        let first = name(items[0]), second = name(items[1]), more = items.count - 2
+        return spoken ? String(localized: "\(first), \(second) and \(more) more") : "\(first), \(second) +\(more)"
+    }
     if !items.isEmpty { return items.map(name).joined(separator: ", ") }
     let note = note.trimmingCharacters(in: .whitespacesAndNewlines)
     return note.isEmpty ? String(localized: "Meal") : note

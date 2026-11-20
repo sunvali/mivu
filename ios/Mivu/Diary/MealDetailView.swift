@@ -236,7 +236,7 @@ struct MealDetailView: View {
         if case .some(.photo(_)) = deletion { return String(localized: "Delete this photo?") }
         if case .some(.food(let item, _)) = deletion { return String(localized: "Delete \(item.name)?") }
         guard let meal = model.meal(mealID), let day = model.day(meal.dayID) else { return String(localized: "Delete meal?") }
-        return String(localized: "Delete “\(meal.displayTitle)” on \(day.localDate)?")
+        return String(localized: "Delete “\(meal.spokenTitle)” on \(day.localDate)?")
     }
     /// `revision` is what the person saw when they chose to delete; a newer meal is refused as stale.
     private func deleteFood(_ item: FoodItem, revision: Int?) async -> Bool {
@@ -301,7 +301,7 @@ struct MealDetailView: View {
     }
     private func mealSummary(_ meal: MealReadModel, snapshot: DiaryReadModel) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(meal.displayTitle)
+            Text(meal.displayTitle).accessibilityLabel(meal.spokenTitle)
                 .font(.title.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
             if meal.timePrecision == .dateOnly {
                 Text(model.day(meal.dayID)?.localDate ?? String(localized: "Historical meal"))

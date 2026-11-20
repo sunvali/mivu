@@ -14,6 +14,7 @@ import Testing
         #expect(mealTitle(items: [chicken, rice], title: title, note: "") == "Chicken and rice")
         #expect(mealTitle(items: [rice, chicken], title: nil, note: "") == "Rice, Chicken")
         #expect(mealTitle(items: [rice, chicken, food("Salad"), food("Tea")], title: nil, note: "") == "Rice, Chicken +2")
+        #expect(mealTitle(items: [rice, chicken, food("Salad"), food("Tea")], title: nil, note: "", spoken: true) == "Rice, Chicken and 2 more")
         #expect(mealTitle(items: [rice, food("Salad")], title: title, note: "") == "Rice, Salad")
         #expect(mealTitle(items: [], title: nil, note: "  rice and chicken ") == "rice and chicken")
     }
