@@ -676,20 +676,16 @@ private final class CoachNavigationReadFence: Sendable {
     deinit { monitor.cancel() }
     func waitForWorker() async { await worker?.value }
 
-    static let appleModelKey = "apple"
-
-    /// Matches what the person named against their own plan's models; nothing changes until the turn ends.
+    /// Matches what the person named against the chosen plan's models; nothing changes until the turn ends.
+    /// Apple versus ChatGPT is a Settings choice, so a chat request never crosses it.
     func requestModel(_ name: String) -> String {
-        let available = connection.coachModels.map(\.displayName)
+        let available = connection.coachModels
         func json(_ value: [String: Any]) -> String {
             (try? JSONSerialization.data(withJSONObject: value, options: .sortedKeys)).map { String(decoding: $0, as: UTF8.self) } ?? "{}"
         }
-        if connection.appleAvailable, name.trimmingCharacters(in: .whitespaces).lowercased().hasPrefix("apple") {
-            pendingModel = (Self.appleModelKey, connection.activeRegistrationID)
-            return json(["changed": true, "model": "Apple, on this iPhone", "applies": "next message"])
-        }
-        guard connection.planAuthorized, let model = ModelFamily.match(name, in: connection.models) else {
-            return json(["changed": false, "available": available])
+        guard !available.isEmpty else { return json(["changed": false, "reason": "Coach AI is switched in Settings"]) }
+        guard let model = ModelFamily.match(name, in: available) else {
+            return json(["changed": false, "available": available.map(\.displayName)])
         }
         pendingModel = (model.slug, connection.activeRegistrationID)
         return json(["changed": true, "model": model.displayName, "applies": "next message"])
@@ -700,7 +696,7 @@ private final class CoachNavigationReadFence: Sendable {
         pendingModel = nil
         // A switch asked for under one account never lands on another.
         guard requested.account == connection.activeRegistrationID else { return }
-        if requested.choice == Self.appleModelKey { connection.chooseApple(announce: true) } else { connection.choose(requested.choice, announce: true) }
+        connection.choose(requested.choice, announce: true)
     }
     // shortcut: session only, lost on relaunch; store with the turn if users miss the button.
     private var consultedByTurn: (turnID: UUID, items: [CoachConsulted])?

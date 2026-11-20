@@ -216,9 +216,14 @@ import Testing
         let diary = DiaryViewModel(store: DiaryStore(directory: fixture.directory.appending(path: "Diary")))
         let coach = CoachViewModel(diary: diary, connection: fixture.connection, sleep: { _ in })
         #expect(!coach.requestModel("the smarter one").contains("Apple"))
-        // Apple chosen in Settings: Coach offers no ChatGPT models either.
+        #expect(coach.requestModel("Apple").contains(#""changed":false"#))
+        #expect(fixture.connection.provider == .chatGPT)
+        // Apple chosen in Settings: Coach offers no ChatGPT models, and neither chat nor Settings' model picker leaves Apple.
         fixture.connection.provider = .apple
         #expect(fixture.connection.coachModels.isEmpty)
+        #expect(coach.requestModel("Second synthetic").contains(#""changed":false"#))
+        fixture.connection.choose("second-model")
+        #expect(fixture.connection.provider == .apple)
     }
 
     @Test func profileChangeDuringUsageRetryDelayStopsBeforeAnotherRequest() async throws {

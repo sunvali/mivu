@@ -936,6 +936,8 @@ extension ConnectionTests {
         fixture.connection.choose("second-model")
         #expect(fixture.connection.selectedModel == "second-model")
         #expect(fixture.connection.modelNotice == nil)
+        fixture.connection.choose("second-model", announce: true)
+        #expect(fixture.connection.modelNotice == nil, "Asking for the current model changes nothing to announce")
         #expect(fixture.preferences.data(forKey: "modelChoice." + fixture.credentials.registrationID) != nil)
         let relaunched = fixture.relaunched()
         await relaunched.restore()

@@ -286,26 +286,19 @@ final class ChatGPTConnection {
         }
     }
 
-    /// The person's pick: remembered for this account, and followed to newer versions of its family.
+    /// The person's ChatGPT pick: remembered for this account and followed to newer versions of its family.
+    /// Apple versus ChatGPT stays the Settings choice, so this never changes the provider.
     func choose(_ slug: String, announce: Bool = false) {
         guard let model = models.first(where: { $0.slug == slug }) else { return }
-        let previous = provider == .chatGPT ? models.first { $0.slug == selectedModel } : nil
-        provider = .chatGPT
+        let previous = models.first { $0.slug == selectedModel }
         remember(ModelChoice(slug: slug, family: ModelFamily.parse(model.displayName)?.family))
         selectedModel = slug
-        modelNotice = announce ? ModelNotice(kind: .changed, from: previous?.displayName ?? Self.appleName, to: model.displayName,
-                                             undoSlug: previous?.slug == slug ? nil : previous?.slug) : nil
+        modelNotice = announce ? previous.flatMap {
+            $0.slug == slug ? nil : ModelNotice(kind: .changed, from: $0.displayName, to: model.displayName, undoSlug: $0.slug)
+        } : nil
     }
 
     static let appleName = String(localized: "Apple · on this iPhone")
-
-    func chooseApple(announce: Bool = false) {
-        guard appleAvailable else { return }
-        let previous = provider == .chatGPT ? selectedModelName : nil
-        provider = .apple
-        // Crossing providers has no Undo; the title menu switches back.
-        modelNotice = announce ? previous.map { ModelNotice(kind: .changed, from: $0, to: Self.appleName, undoSlug: nil) } : nil
-    }
 
     /// After an upgrade, Undo holds the older version until a newer one than the declined appears.
     func undoModelChange() {
