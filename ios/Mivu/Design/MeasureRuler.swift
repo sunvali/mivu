@@ -105,8 +105,9 @@ struct MeasureRuler<Field: Hashable>: View {
         .accessibilityLabel(title)
         .accessibilityValue(formatted.map { $0(number ?? placeholder) } ?? "\((number ?? placeholder).formatted()) \(unit)")
         .accessibilityAdjustableAction { direction in
-            // One whole unit per swipe; the number field types anything finer.
-            let stepped = (number ?? placeholder).rounded() + (direction == .increment ? 1 : -1)
+            // One whole unit, or one haptic interval on fine rulers, per swipe; the number field types anything finer.
+            let swipe = max(1, step * Double(feedbackEvery))
+            let stepped = (((number ?? placeholder) / swipe).rounded() + (direction == .increment ? 1 : -1)) * swipe
             write(min(range.upperBound, max(range.lowerBound, stepped)))
         }
         .accessibilityIdentifier(fieldID + "Ruler")

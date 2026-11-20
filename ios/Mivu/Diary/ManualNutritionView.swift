@@ -132,13 +132,13 @@ struct ManualNutritionView: View {
                                  fieldID: "manualAmount", focus: $editingField, field: "Amount", feedbackEvery: isMass ? 10 : 2)
                         .id(draft.unit) // a fresh ruler per unit, so its marks and number width start clean
                         .padding(.vertical, 8).listRowSeparator(.hidden)
-                    presetRow.listRowSeparator(.hidden)
                     Picker("Unit", selection: Binding(get: { draft.unit }, set: { draft.setUnit($0); editingField = nil })) {
                         ForEach(ManualNutritionDraft.units + (ManualNutritionDraft.units.contains(draft.unit) ? [] : [draft.unit]), id: \.self) {
                             Text(FoodItem.shownUnit($0)).tag($0)
                         }
                     }
-                    .pickerStyle(.segmented).frame(minHeight: 44).accessibilityIdentifier("manualUnit").listRowSeparator(.hidden)
+                    .pickerStyle(.segmented).frame(minHeight: 44).accessibilityLabel(String(localized: "Unit")).accessibilityIdentifier("manualUnit").listRowSeparator(.hidden)
+                    presetRow.listRowSeparator(.hidden)
                     if ![draft.kcal, draft.protein, draft.carbs, draft.fat].allSatisfy(\.isEmpty) { liveSummary }
                 }
                 Section {
@@ -191,6 +191,7 @@ struct ManualNutritionView: View {
                 Button("Keep editing", role: .cancel) {}
             } message: { Text("Your unsaved food and nutrition will be discarded.") }
             .sensoryFeedback(.impact(weight: .light), trigger: chipTaps)
+            .sensoryFeedback(.selection, trigger: draft.unit)
             .task {
                 if ownership == nil { ownership = model.selection }
                 if let token = ownership, recentFoods.isEmpty {
@@ -201,11 +202,11 @@ struct ManualNutritionView: View {
     }
     private var isMass: Bool { ["g", "ml"].contains(draft.unit) }
     private var rulerStep: Double { isMass ? 5 : 0.5 }
-    /// The ruler grows to fit a typed amount, so it never pins below what was entered.
+    /// The ruler grows to fit a typed amount up to five times its usual end; larger typed amounts still save.
     private var rulerRange: ClosedRange<Double> {
         let top = isMass ? 1000.0 : 10.0
         // Zero keeps labelled marks on round numbers; a zero amount only disables Save.
-        return 0...max(top, ((draft.amount ?? 0) / top).rounded(.up) * top)
+        return 0...min(top * 5, max(top, ((draft.amount ?? 0) / top).rounded(.up) * top))
     }
     private var recentRow: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -213,8 +214,12 @@ struct ManualNutritionView: View {
             ScrollView(.horizontal) {
                 HStack(spacing: 8) {
                     ForEach(recentFoods) { food in
-                        Button { draft.use(food); editingField = nil; chipTaps += 1 } label: { chip(food.name, selected: false) }
-                            .buttonStyle(.plain).accessibilityIdentifier("recentFood")
+                        let current = food.name == draft.name
+                        Button { draft.use(food); editingField = nil; chipTaps += 1 } label: { chip(food.name, selected: current).frame(maxWidth: 220) }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("\(String(localized: "Recent foods", comment: "Label above chips of recently logged foods on the manual food entry screen")), \(food.name)")
+                            .accessibilityAddTraits(current ? .isSelected : [])
+                            .accessibilityIdentifier("recentFood")
                     }
                 }
             }
@@ -243,7 +248,7 @@ struct ManualNutritionView: View {
         Text(text).font(.subheadline.weight(.semibold)).lineLimit(1)
             .padding(.horizontal, 16).frame(minWidth: 44, minHeight: 44)
             .foregroundStyle(selected ? Color.diaryCanvas : Color.diaryAccent)
-            .background(Capsule().fill(selected ? Color.diaryAccent : Color.diaryAccent.opacity(0.12)))
+            .background(Capsule().fill(selected ? Color.diaryAccent : Color.diaryAccent.opacity(0.08)))
             .contentShape(Capsule())
     }
     /// Energy and the macro split follow the ruler live, so the effect of an amount is visible while dragging.
@@ -256,19 +261,22 @@ struct ManualNutritionView: View {
         return VStack(alignment: .leading, spacing: 8) {
             if !draft.kcal.isEmpty { HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(draft.kcal).font(.largeTitle.weight(.semibold)).fontDesign(.rounded).monospacedDigit()
-                    .foregroundStyle(Color.diaryEnergy).contentTransition(.numericText())
+                    .foregroundStyle(Color.diaryEnergy).contentTransition(reduceMotion ? .identity : .numericText())
                 Text("kcal").font(.headline).foregroundStyle(Color.diarySecondary)
             } }
-            if total > 0 {
+            // The split only adds up when every macro is known; unknown is not zero.
+            if total > 0, !grams.contains(nil) {
                 Canvas { context, size in
                     var x = 0.0
-                    for (part, color) in [(energy[1], Color.diaryCarbs), (energy[0], Color.diaryProtein), (energy[2], Color.diaryFat)] {
+                    for (part, color) in [(energy[0], Color.diaryProtein), (energy[1], Color.diaryCarbs), (energy[2], Color.diaryFat)] {
                         let width = max(0, size.width * part / total - 2)
                         context.fill(Capsule().path(in: CGRect(x: x, y: 0, width: width, height: size.height)), with: .color(color))
                         x += width + 2
                     }
                 }
                 .frame(maxWidth: .infinity).frame(height: 8)
+            }
+            if grams.contains(where: { $0 != nil }) {
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 12) { legend(grams) }
                     VStack(alignment: .leading, spacing: 2) { legend(grams) }
@@ -279,14 +287,16 @@ struct ManualNutritionView: View {
         .padding(.vertical, 8)
         .animation(reduceMotion ? nil : .snappy, value: draft.kcal)
         .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.updatesFrequently)
         .accessibilityLabel(spoken.isEmpty ? String(localized: "Unknown") : spoken.joined(separator: ", "))
         .accessibilityIdentifier("manualLiveSummary")
     }
     @ViewBuilder private func legend(_ grams: [Double?]) -> some View {
         let text = { (value: Double) in String(localized: "\(value.formatted(.number.precision(.fractionLength(0...1)))) g") }
-        if let carbs = grams[1] { Text("Carbs \(text(carbs))").foregroundStyle(Color.diaryCarbs) }
-        if let protein = grams[0] { Text("Protein \(text(protein))").foregroundStyle(Color.diaryProtein) }
-        if let fat = grams[2] { Text("Fat \(text(fat))").foregroundStyle(Color.diaryFat) }
+        let dot = { (color: Color) in Circle().fill(color).frame(width: 8, height: 8) }
+        if let protein = grams[0] { HStack(spacing: 4) { dot(.diaryProtein); Text("Protein \(text(protein))") } }
+        if let carbs = grams[1] { HStack(spacing: 4) { dot(.diaryCarbs); Text("Carbs \(text(carbs))") } }
+        if let fat = grams[2] { HStack(spacing: 4) { dot(.diaryFat); Text("Fat \(text(fat))") } }
     }
     private func numberField(_ title: String, text: Binding<String>, identifier: String) -> some View {
         Group {
