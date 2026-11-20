@@ -100,6 +100,10 @@ private final class FeedbackStub: URLProtocol, @unchecked Sendable {
         #expect(CoachEngine.stableRules.contains("tap Send feedback under Support"))
         #expect(CoachEngine.stableRules.contains("never say one was sent"))
     }
+    @Test func endpointIsTheReportsWorker() {
+        #expect(Feedback.endpoint(isUITest: false)?.absoluteString == "https://reports.mivuapp.com/feedback")
+        #expect(Feedback.endpoint(isUITest: true) == nil)
+    }
     @Test func sendPostsJSONAndAccepts204() async throws {
         try await Feedback.send(full, to: endpoint, session: FeedbackStub.session())
         #expect(FeedbackStub.request?.httpMethod == "POST")

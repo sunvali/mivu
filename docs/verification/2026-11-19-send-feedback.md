@@ -75,3 +75,35 @@ Branch `feat/send-feedback`, from `main` at `0fcceeee`.
 - The privacy manifest, privacy policy and App Store privacy label are
   unchanged, because nothing is collected by the app until direct sending is
   switched on. They change in that later step.
+
+## Direct sending switched on (2026-11-19, later the same day)
+
+Branch `feat/feedback-direct`, from `main` at `d0fd0bd3`.
+
+- `mivu-infra` `main` at `adae361` was applied with terraform. The plan showed
+  one change, `cloudflare_workers_script.reports` updated in place, and the
+  apply reported 0 added, 1 changed, 0 destroyed. It ran with a Cloudflare
+  token limited to the mivuapp.com zone and account, created for the run and
+  deleted afterwards.
+- Live checks with `curl` against `https://reports.mivuapp.com`:
+  `GET /feedback` 405; `POST /feedback` with an extra field 400; `POST /other`
+  404; a burst of requests 429 (the existing rate limit); one synthetic valid
+  report 204.
+- That synthetic report arrived in the owner's inbox from reports@mivuapp.com
+  with the subject `[Bug] Mivu 1.8.0 (1), iOS 27.0`. The Reply-To header was
+  not inspected.
+- App: `MIVU_FEEDBACK_ENDPOINT` is `https://reports.mivuapp.com/feedback`, so
+  the button reads "Send" and the optional email field shows. UI tests never
+  get an endpoint, so they cannot post.
+- Tested source `64ff9e835894797235b284bcc181a99158c8855e`: `MivuTests/FeedbackTests`,
+  `MivuTests/FeedbackFormTests`, `MivuUITests/FeedbackUITests`, 30 passed,
+  0 failed. `endpointIsTheReportsWorker` failed first (nil) before the setting
+  was added.
+- `PrivacyInfo.xcprivacy` now declares email address and other diagnostic
+  data. The App Privacy answers and a privacy policy paragraph are drafted in
+  [app-store-submission.md](../development/app-store-submission.md).
+
+Still not done: no report has been sent from the app itself to the live route
+(the client is tested against a stub, the route with `curl`); the owner has
+not yet updated the App Store privacy label or published the policy
+paragraph; no physical iPhone check.

@@ -10,5 +10,5 @@ GENERATE_INFOPLIST_FILE = YES
 INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait
 CODE_SIGN_ENTITLEMENTS = Config/Mivu.entitlements
 INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO
-// A URL here must be written https:/$()/host/path, because // starts a comment. Empty means feedback goes by email.
-MIVU_FEEDBACK_ENDPOINT =
+// The reports worker in mivu-infra. Written https:/$()/host/path because // starts a comment. Empty means feedback goes by email.
+MIVU_FEEDBACK_ENDPOINT = https:/$()/reports.mivuapp.com/feedback
