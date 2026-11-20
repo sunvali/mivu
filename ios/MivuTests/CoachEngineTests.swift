@@ -47,7 +47,7 @@ private actor CoachInputFixture {
         let clarification = try #require(tools.first { $0["name"] as? String == "ask_clarification" })
         let clarificationParameters = try #require(clarification["parameters"] as? [String: Any])
         let clarificationProperties = try #require(clarificationParameters["properties"] as? [String: [String: Any]])
-        #expect(clarificationProperties["kind"]?["enum"] as? [String] == ["portion", "food", "day", "meal", "workout", "confirm", "model"])
+        #expect(clarificationProperties["kind"]?["enum"] as? [String] == ["portion", "food", "day", "meal", "workout", "confirm"])
         func checkObject(_ schema: [String: Any]) throws {
             if schema["type"] as? String == "object" {
                 let properties = try #require(schema["properties"] as? [String: [String: Any]])

@@ -54,7 +54,8 @@ Mivu is AI-first, so anything that can be done by hand must also be doable by as
 - A request such as "Use Astra from now on" changes the model. Coach replies with a "Model changed" receipt card
   (GPT‑6.2 Sol → GPT‑6.2 Astra) that has an Undo button and a VoiceOver action.
 - If the request is vague ("the smarter one") or names a model the account does not list, Coach does not guess. It
-  replies with the account's models as tappable choices, and nothing changes until one is tapped.
+  answers in plain text naming the plan's models and pointing to the title menu; nothing changes. (Owner, 2026-11-20:
+  no tappable buttons, because they would need a new saved question kind that backups and Android cannot read yet.)
 
 ### Switching while Coach is answering
 - Keep today's behavior: `TodayView` already cancels and resumes the Coach worker when `selectedModel` changes. The
