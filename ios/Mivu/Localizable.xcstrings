@@ -35463,6 +35463,98 @@
           }
         }
       }
+    },
+    "What should I eat?" : {
+      "comment" : "Coach quick-prompt chip that starts a what-to-eat question for the person to finish",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מה כדאי לאכול?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Qué comer?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Что съесть?"
+          }
+        }
+      }
+    },
+    "What should I eat next? " : {
+      "comment" : "Text a Coach quick-prompt chip puts in the message box; the person may add context before sending",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מה כדאי לאכול עכשיו? "
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Qué me conviene comer ahora? "
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Что лучше съесть дальше? "
+          }
+        }
+      }
+    },
+    "Which is better?" : {
+      "comment" : "Coach quick-prompt chip that starts a food comparison for the person to finish",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מה עדיף?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Cuál es mejor?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Что лучше?"
+          }
+        }
+      }
+    },
+    "Which is better: " : {
+      "comment" : "Text a Coach quick-prompt chip puts in the message box before the person names the foods to compare",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מה עדיף: "
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Cuál es mejor: "
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Что лучше: "
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

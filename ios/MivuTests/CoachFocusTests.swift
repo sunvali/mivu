@@ -44,6 +44,12 @@ import Testing
         #expect(CoachEngine.stableRules.contains("suggest a doctor or registered dietitian"))
     }
 
+    @Test func photoComparisonIsAdviceButEatingStillLogs() {
+        #expect(CoachEngine.stableRules.contains("only compares foods or asks which to choose"))
+        #expect(CoachEngine.stableRules.contains("says nothing about eating them"))
+        #expect(CoachEngine.stableRules.contains("If it says they ate, are eating or are logging one of them, log that first, then answer."))
+    }
+
     @Test func stableRulesReplyInTheMessageLanguage() {
         #expect(CoachEngine.stableRules.contains("Reply in the language of the person's latest message."))
         #expect(CoachEngine.stableRules.contains("never assume the person's gender"))
