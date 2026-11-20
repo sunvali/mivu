@@ -340,4 +340,7 @@ struct CoachQuestion: Codable, Equatable, Sendable {
     var originalText: String
     /// Likely foods for an unclear name, shown as one-tap answers.
     var options: [String]? = nil
+    /// Only a which-record question is answered by picking one; on a portion, food or day question
+    /// the candidates just say which record it is about, and tapping one would not answer it.
+    var picksRecord: Bool { !candidates.isEmpty && [.meal, .workout, .confirm].contains(kind) }
 }

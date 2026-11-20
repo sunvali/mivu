@@ -156,7 +156,8 @@ struct CoachEngine: Sendable {
                     continue
                 }
                 if let (kind, candidates, about, options) = clarification {
-                    var question = candidates.isEmpty ? kind.question : String(localized: "Which one did you mean?")
+                    let asked = CoachQuestion(kind: kind, candidates: candidates, originalText: turn.text, options: options.isEmpty ? nil : options)
+                    var question = asked.picksRecord ? String(localized: "Which one did you mean?") : kind.question
                     if kind == .food, candidates.isEmpty, let about { question = String(localized: "What is “\(about)”?") }
                     if kind == .confirm, case .meal(let id) = candidates.first {
                         let names = (knownMeals.first { $0.id == id }?.items.map(\.name) ?? foundMeals.first { $0.id == id }?.items.map(\.name) ?? []).joined(separator: ", ")
@@ -169,7 +170,7 @@ struct CoachEngine: Sendable {
                     }
                     // A clarification after committed writes keeps their summary ahead of the question.
                     let text = currentTurn.receipts.isEmpty ? question : try await store.coachCommittedSummary(turnID: turnID, expectedProfileID: expectedProfileID) + "\n" + question
-                    try await store.finishCoachTurn(turnID: turnID, assistantText: text, question: CoachQuestion(kind: kind, candidates: candidates, originalText: turn.text, options: options.isEmpty ? nil : options), epoch: epoch, expectedProfileID: expectedProfileID)
+                    try await store.finishCoachTurn(turnID: turnID, assistantText: text, question: asked, epoch: epoch, expectedProfileID: expectedProfileID)
                     return try await store.coachResult(turnID: turnID, expectedProfileID: expectedProfileID)
                 }
                 var outputs: [String?] = Array(repeating: nil, count: commands.count)

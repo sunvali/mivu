@@ -628,7 +628,7 @@ struct CoachView: View {
     }
     private var hasOpenQuestion: Bool {
         guard let turn = coach.timeline?.exchanges.last, coach.timeline?.window.isLatest(turn.id) == true, let question = turn.question else { return false }
-        return question.options != nil || !question.candidates.isEmpty
+        return question.options != nil || question.picksRecord
     }
     private var quickPrompts: [QuickPrompt] {
         guard let model = coach.diary.readModel else { return [] }
@@ -975,7 +975,7 @@ struct CoachView: View {
     }
     private func turnActions(_ turn: CoachExchangeSummary) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let question = turn.question, !question.candidates.isEmpty, coach.timeline?.window.isLatest(turn.id) == true {
+            if let question = turn.question, question.picksRecord, coach.timeline?.window.isLatest(turn.id) == true {
                 CoachQuestionChips(question: question, meals: coach.linkedMeals(turn), model: coach.diary) { target, label, excerpt in
                     Task { await coach.answer(target, label: label, excerpt: excerpt) }
                 }.disabled(coach.isWorking)
