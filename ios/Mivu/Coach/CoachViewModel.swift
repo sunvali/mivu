@@ -202,6 +202,7 @@ private final class CoachNavigationReadFence: Sendable {
     }
     /// Sends a one-tap message; anything the person was composing is set aside and put back afterwards.
     private func sendTap(_ text: String, reply: CoachReply) async {
+        connection.dismissModelNotice()
         synchronizeDraftOwnership()
         guard !isSending, !attachmentDraft.isPreparing else { return }
         let kept = draft, keptReply = attachmentDraft.reply, owner = diary.selection
@@ -333,6 +334,7 @@ private final class CoachNavigationReadFence: Sendable {
 
     func synchronizeDraftOwnership() { attachmentDraft.synchronizeOwnership(diary.selection) }
     @discardableResult func send() async -> Bool {
+        connection.dismissModelNotice()
         guard sending == nil else { return false }
         let task = Task { await performSend() }
         sending = task

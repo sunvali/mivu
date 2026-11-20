@@ -564,7 +564,7 @@ final class ChatGPTConnection {
 
     private func apply(_ snapshot: SessionSnapshot?) {
         #if DEBUG
-        if isNotEligibleFixture { return }
+        if isAccountFixture { return }
         #endif
         activeRegistrationID = snapshot?.registrationID
         planScopeGranted = snapshot?.planPermissionGranted ?? false
@@ -639,9 +639,15 @@ final class ChatGPTConnection {
     }
 
     #if DEBUG
-    /// UI tests only: a signed-in account whose plan OpenAI won't share. It has no saved session, so lifecycle re-applies keep it.
-    @ObservationIgnored private var isNotEligibleFixture = false
-    func applyNotEligibleFixture() { isNotEligibleFixture = true; activeRegistrationID = "fixture-registration"; accountState = .planNotEligible }
+    /// UI tests only: a fixture account has no saved session, so lifecycle re-applies keep it.
+    @ObservationIgnored private var isAccountFixture = false
+    func applyNotEligibleFixture() { isAccountFixture = true; activeRegistrationID = "fixture-registration"; accountState = .planNotEligible }
+    /// UI tests only: a connected account offering two synthetic models.
+    func applyModelMenuFixture() {
+        isAccountFixture = true; activeRegistrationID = "fixture-registration"; accountState = .connected
+        models = [AvailableModel(slug: "fixture-sol", displayName: "GPT-6.2 Sol"), AvailableModel(slug: "fixture-astra", displayName: "GPT-6.2 Astra")]
+        selectedModel = "fixture-sol"
+    }
     #endif
 
     private func markNotEligible(_ snapshot: SessionSnapshot?) {

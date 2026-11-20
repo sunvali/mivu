@@ -35,6 +35,25 @@ import XCTest
         XCTAssertEqual(XCTWaiter.wait(for: [visible], timeout: 5), .completed)
     }
 
+    func testModelMenuSwitchesFromTheCoachTitle() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--model-menu-fixture", "--proof-english"]
+        app.launch()
+        let bar = app.navigationBars["Coach"]
+        XCTAssertTrue(bar.waitForExistence(timeout: 15))
+        let welcome = app.buttons["Got it"]
+        if welcome.waitForExistence(timeout: 5) { welcome.tap() }
+        let model = app.buttons["coachModelMenu"]
+        XCTAssertTrue(model.waitForExistence(timeout: 5), "The current model shows under the title")
+        XCTAssertEqual(model.label, "Coach model, GPT-6.2 Sol")
+        model.tap()
+        let astra = app.buttons["GPT-6.2 Astra"]
+        XCTAssertTrue(astra.waitForExistence(timeout: 5), "It opens the account's models")
+        astra.tap()
+        let switched = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Coach model, GPT-6.2 Astra"), object: model)
+        XCTAssertEqual(XCTWaiter.wait(for: [switched], timeout: 5), .completed)
+    }
+
     func testPlanNotEligibleExplainsOnceAndInSettings() {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--plan-not-eligible-fixture", "--proof-english"]

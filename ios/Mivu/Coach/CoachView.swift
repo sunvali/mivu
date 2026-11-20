@@ -72,7 +72,8 @@ struct CoachView: View {
     private var atTable: Bool { posture == .table && coach.diary.readModel != nil }
     private var conversationInset: CGFloat { atTable ? 0 : composerHeight }
     private var composerStack: some View {
-        VStack(spacing: 8) { queuedSiri; AnyView(composer) }.fixedSize(horizontal: false, vertical: true)
+        VStack(spacing: 8) { AnyView(modelNoticeBar); queuedSiri; AnyView(composer) }.fixedSize(horizontal: false, vertical: true)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: coach.connection.modelNotice)
     }
     private var conversation: some View {
         VStack(spacing: 0) {
@@ -129,6 +130,8 @@ struct CoachView: View {
         .background { Color.diaryCanvas.ignoresSafeArea() }
         .navigationTitle("Coach").toolbarTitleDisplayMode(.inlineLarge)
         .toolbar {
+            // The large title itself cannot open a menu, so the model sits under it as its own control.
+            ToolbarItem(placement: .largeSubtitle) { AnyView(modelControl) }
             ToolbarItem(placement: .topBarLeading) {
                 Button("Chat history", systemImage: "clock.arrow.circlepath", action: openHistory)
                     .frame(minWidth: 44, minHeight: 44).accessibilityIdentifier("coachHistory")
@@ -469,6 +472,93 @@ struct CoachView: View {
         }
     }
     /// One Siri message saved while locked; it reaches the Coach only on Send.
+    /// Who answers: Apple on this iPhone or the chosen ChatGPT model. Empty when neither can.
+    private var modelSubtitle: String {
+        let connection = coach.connection
+        if connection.provider == .apple, connection.appleAvailable { return ChatGPTConnection.appleName }
+        if connection.planAuthorized, let name = connection.selectedModelName { return name }
+        return ""
+    }
+
+    /// Only a real choice gets a menu; a one-model plan just shows its name.
+    @ViewBuilder private var modelControl: some View {
+        let connection = coach.connection
+        let subtitle = modelSubtitle
+        let choices = (connection.planAuthorized ? connection.models.count : 0) + (connection.appleAvailable ? 1 : 0)
+        if subtitle.isEmpty {
+            EmptyView()
+        } else if choices > 1 {
+            Menu { modelMenu } label: {
+                HStack(spacing: 4) {
+                    Text(subtitle)
+                    Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).accessibilityHidden(true)
+                }
+                .font(.subheadline.weight(.medium)).foregroundStyle(Color.diaryAccent)
+                .frame(minHeight: 44).contentShape(Rectangle())
+            }
+            .accessibilityLabel(String(localized: "Coach model, \(subtitle)"))
+            .accessibilityHint(String(localized: "Choose who answers in Coach"))
+            .accessibilityIdentifier("coachModelMenu")
+        } else {
+            Text(subtitle).font(.subheadline).foregroundStyle(Color.diarySecondary)
+                .accessibilityLabel(String(localized: "Coach model, \(subtitle)"))
+        }
+    }
+
+    @ViewBuilder private var modelMenu: some View {
+        let connection = coach.connection
+        let chatGPT = connection.planAuthorized ? connection.models : []
+        Group {
+            if !chatGPT.isEmpty {
+                Section("ChatGPT") {
+                    ForEach(chatGPT, id: \.slug) { model in
+                        let current = connection.provider == .chatGPT && model.slug == connection.selectedModel
+                        Button {
+                            guard !current else { return }
+                            let busy = coach.isWorking
+                            connection.choose(model.slug)
+                            if busy { connection.noteReanswering() }
+                        } label: {
+                            if current { Label(model.displayName, systemImage: "checkmark") } else { Text(model.displayName) }
+                        }
+                    }
+                }
+            }
+            if connection.appleAvailable {
+                Section("On this iPhone") {
+                    Button { connection.chooseApple() } label: {
+                        if connection.provider == .apple { Label("Apple", systemImage: "checkmark") } else { Text("Apple") }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var modelNoticeBar: some View {
+        if let notice = coach.connection.modelNotice {
+            let text = switch notice.kind {
+            case .changed: String(localized: "Now using \(notice.to)")
+            case .upgraded: String(localized: "Now using \(notice.to) (was \(notice.from))")
+            case .reanswering: String(localized: "Switched to \(notice.to) · answering again")
+            }
+            HStack(spacing: 4) {
+                Text(text).font(.subheadline).frame(maxWidth: .infinity, alignment: .leading)
+                if notice.undoSlug != nil {
+                    Button("Undo") { coach.connection.undoModelChange() }
+                        .fontWeight(.semibold).frame(minWidth: 44, minHeight: 44).accessibilityIdentifier("modelNoticeUndo")
+                }
+                Button("Dismiss", systemImage: "xmark") { coach.connection.dismissModelNotice() }
+                    .labelStyle(.iconOnly).foregroundStyle(Color.diarySecondary).frame(minWidth: 44, minHeight: 44)
+            }
+            .padding(.leading, 16).padding(.trailing, 4)
+            .background(Capsule().fill(Color.diarySummarySurface))
+            .padding(.horizontal, 16)
+            .transition(.opacity)
+            .accessibilityElement(children: .contain).accessibilityIdentifier("modelNotice")
+            .onAppear { AccessibilityNotification.Announcement(text).post() }
+        }
+    }
+
     @ViewBuilder private var queuedSiri: some View {
         if let entry = coach.queuedSiri.first {
             VStack(alignment: .leading, spacing: 8) {
