@@ -91,20 +91,20 @@ struct QuickPromptsTests {
     @Test func hiddenChipsAreSkippedBeforeTheLimit() {
         let source = meal(day: 16, hour: 8)
         let ids = QuickPrompts.choose(input(hour: 8, recent: [recent(16, source)], hidden: ["relog"])).map(\.id)
-        #expect(ids == ["ask.yesterday", "log.slot", "log.weight"])
+        #expect(ids == ["ask.yesterday", "log.slot", "log.weight", "ask.eat"])
     }
 
     @Test func sendChipStaysInTheFirstTwo() {
         let source = meal(day: 16, hour: 13)
         let ids = QuickPrompts.choose(input(hour: 13, recent: [recent(16, source)], hidden: ["ask.calories"])).map(\.id)
-        #expect(ids == ["relog", "log.slot", "log.weight"])
+        #expect(ids == ["relog", "log.slot", "log.weight", "ask.eat"])
         let shown = QuickPrompts.choose(input(hour: 13, recent: [recent(16, source)])).map(\.id)
         #expect(shown == ["relog", "ask.calories", "log.slot", "log.weight"])
     }
 
-    @Test func newUserWithoutTargetGetsLoggingChipsOnly() {
+    @Test func newUserWithoutTargetGetsNoSentQuestions() {
         let chips = QuickPrompts.choose(input(hour: 13, kcalTarget: nil))
-        #expect(chips.map(\.id) == ["log.slot", "log.weight"])
+        #expect(chips.map(\.id) == ["log.slot", "log.weight", "ask.eat"])
         #expect(!chips.contains { $0.sends })
     }
 
@@ -113,12 +113,25 @@ struct QuickPromptsTests {
         let ids = QuickPrompts.choose(input(hour: 13, todaysMeals: [lunch], kcalTarget: nil,
                                             latest: .meal(id: lunch.id, items: committed(lunch), localDate: "2026-11-17"))).map(\.id)
         #expect(ids == ["ask.balanced", "fix.portion", "add.drink"])
-        #expect(QuickPrompts.choose(input(hour: 13, kcalTarget: nil, latest: .workout(localDate: "2026-11-17"))).map(\.id) == ["log.slot", "log.weight"])
+        #expect(QuickPrompts.choose(input(hour: 13, kcalTarget: nil, latest: .workout(localDate: "2026-11-17"))).map(\.id) == ["log.slot", "log.weight", "ask.eat"])
     }
 
     @Test func loggedSlotOffersASnack() {
         let ids = QuickPrompts.choose(input(hour: 13, todaysMeals: [meal(hour: 12)])).map(\.id)
-        #expect(ids == ["ask.calories", "log.snack", "log.weight"])
+        #expect(ids == ["ask.calories", "log.snack", "log.weight", "ask.better"])
+    }
+
+    /// Logging chips keep their places; an advice chip only takes room they leave free, and only fills the box.
+    @Test func adviceChipOnlyTakesLeftoverRoom() {
+        let chips = QuickPrompts.choose(input(hour: 13))
+        #expect(chips.map(\.id) == ["ask.calories", "log.slot", "log.weight", "ask.eat"])
+        #expect(chips.last?.action == .fill("What should I eat next? "))
+        #expect(QuickPrompts.choose(input(hour: 13, limit: 2)).map(\.id) == ["ask.calories", "log.slot"])
+        let full = QuickPrompts.choose(input(hour: 8, recent: [recent(16, meal(day: 16, hour: 8))])).map(\.id)
+        #expect(full == ["relog", "ask.yesterday", "log.slot", "log.weight"])
+        let logged = QuickPrompts.choose(input(hour: 13, todaysMeals: [meal(hour: 12)]))
+        #expect(logged.last?.action == .fill("Which is better: "))
+        #expect(!QuickPrompts.choose(input(hour: 13, hidden: ["ask.eat"])).map(\.id).contains("ask.eat"))
     }
 
     @Test func weighInAndMorningCardHideTheWeightChip() {

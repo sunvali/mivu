@@ -678,11 +678,12 @@ struct CoachView: View {
             }
             .scrollTargetBehavior(.viewAligned).scrollIndicators(.hidden)
             // Only a row with more to scroll fades at its end, so it reads as more; chips that fit stay whole.
-            .onScrollGeometryChange(for: Bool.self) { $0.contentSize.width > $0.containerSize.width + $0.contentOffset.x + 1 } action: { _, more in promptsOverflow = more }
+            // A width, not a Bool: SwiftUI skipped the final Bool change, leaving a hard cut where the row overflowed.
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.width - $0.containerSize.width - $0.contentOffset.x } action: { _, hidden in promptsOverflow = hidden > 1 }
             .mask {
                 HStack(spacing: 0) {
                     Color.black
-                    if promptsOverflow { LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 24) }
+                    if promptsOverflow { LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 48) }
                 }
             }
             .accessibilityElement(children: .contain).accessibilityIdentifier("coachQuickPrompts")

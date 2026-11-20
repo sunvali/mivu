@@ -138,6 +138,10 @@ enum QuickPrompts {
             chips.append(QuickPrompt(id: "log.weight", title: String(localized: "Log weight…"), symbol: "scalemass",
                                      action: .fill(String(localized: "My weight this morning is "))))
         }
+        // Last, so the limit drops advice before any logging chip; it only fills, so the person adds foods or context.
+        chips.append(logged
+            ? QuickPrompt(id: "ask.better", title: String(localized: "Which is better?"), symbol: "lightbulb", action: .fill(String(localized: "Which is better: ")))
+            : QuickPrompt(id: "ask.eat", title: String(localized: "What should I eat?"), symbol: "lightbulb", action: .fill(String(localized: "What should I eat next? "))))
         return chips
     }
 

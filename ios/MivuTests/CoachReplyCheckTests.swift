@@ -65,6 +65,9 @@ import Testing
         #expect(!CoachReplyCheck.passes("You have about 600 kcal left.", allowed: allowed, receipts: [], generalFacts: true))
         #expect(!CoachReplyCheck.passes("You’re at about 900 kcal.", allowed: allowed, receipts: [], generalFacts: true))
         #expect(CoachReplyCheck.passes("You're at **500** kcal today. A pot of Greek yogurt adds about 17 g protein.", allowed: allowed, receipts: [], generalFacts: true))
+        // The comparison shape the rules teach passes; the same numbers in one sentence do not.
+        #expect(CoachReplyCheck.passes("The salad is about 300 kcal. That fits the 500 left today.", allowed: allowed, receipts: [], generalFacts: true))
+        #expect(!CoachReplyCheck.passes("The salad, about 300 kcal, fits the 500 you have left.", allowed: allowed, receipts: [], generalFacts: true))
     }
 
     @Test func savedTurnsStayStrictEvenWithGeneralFacts() {

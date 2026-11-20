@@ -44,6 +44,22 @@ import Testing
         #expect(CoachEngine.stableRules.contains("suggest a doctor or registered dietitian"))
     }
 
+    @Test func comparisonIsAdviceButEatingStillLogs() {
+        let rules = CoachEngine.stableRules
+        #expect(rules.contains("only compares foods or asks which to choose, with or without a photo"))
+        #expect(rules.contains("says nothing about eating them"))
+        #expect(rules.contains("If the message clearly says they ate, are eating, drank or are logging something, log it as usual, then answer."))
+        // One merged eating rule, not two near-copies the model might weigh differently.
+        #expect(!rules.contains("If it says they ate, are eating or are logging one of them"))
+        // The reply check rejects a hedged typical value beside a diary number, so the model is shown the split.
+        #expect(rules.contains("Keep typical values and diary numbers in separate sentences"))
+    }
+
+    @Test func dietingAdviceStaysGentle() {
+        #expect(CoachEngine.stableRules.contains("Never recommend skipping meals, crash diets or eating far below their target"))
+        #expect(CoachEngine.stableRules.contains("never call a food bad"))
+    }
+
     @Test func stableRulesReplyInTheMessageLanguage() {
         #expect(CoachEngine.stableRules.contains("Reply in the language of the person's latest message."))
         #expect(CoachEngine.stableRules.contains("never assume the person's gender"))
