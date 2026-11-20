@@ -32,6 +32,8 @@ private final class CoachNavigationReadFence: Sendable {
     private(set) var companionPhotoEvent: CompanionEvent?
     private(set) var isSending = false
     private(set) var isWorking = false
+    /// A switch asked for in chat; applied once that turn finishes, so the reply keeps the model it started with.
+    @ObservationIgnored private var pendingModel: String?
     private(set) var activity: CoachActivity?
     private(set) var activityTurnID: UUID?
     var errorMessage: String? {
@@ -498,6 +500,7 @@ private final class CoachNavigationReadFence: Sendable {
                             }
                         }
                         let photoLimiter = diary.photoWorkLimiter
+                        pendingModel = nil
                         do {
                             _ = try await CoachEngine(store: diary.store, infer: resilient, lookup: lookup, prepareImages: { originals in
                                 try await photoLimiter.withPermit { try PhotoImport.visionCopies(originals) }
@@ -505,6 +508,8 @@ private final class CoachNavigationReadFence: Sendable {
                                 await self.reportActivity(phase, workerID: id, owner: owner, turnID: turn.id)
                             }, onConsulted: { read in
                                 await self.noteConsulted(read, turnID: turn.id)
+                            }, chooseModel: { name in
+                                await self.requestModel(name)
                             }).run(turnID: turn.id, expectedProfileID: owner)
                         } catch {
                             guard !Task.isCancelled, diary.selection == selected else { break }
@@ -519,6 +524,8 @@ private final class CoachNavigationReadFence: Sendable {
                             await diary.loadMeal(mealID)
                             if let meal = diary.meal(mealID) { MealNotification.post(meal) }
                         }
+                        // Last in the turn: the switch restarts this worker, as any model change does.
+                        applyRequestedModel()
                     }
                 } catch {
                     processingFailed = true
@@ -668,6 +675,31 @@ private final class CoachNavigationReadFence: Sendable {
     func cancel() { activity = nil; activityTurnID = nil; worker?.cancel() }
     deinit { monitor.cancel() }
     func waitForWorker() async { await worker?.value }
+
+    static let appleModelKey = "apple"
+
+    /// Matches what the person named against their own plan's models; nothing changes until the turn ends.
+    func requestModel(_ name: String) -> String {
+        let available = (connection.planAuthorized ? connection.models.map(\.displayName) : []) + (connection.appleAvailable ? ["Apple"] : [])
+        func json(_ value: [String: Any]) -> String {
+            (try? JSONSerialization.data(withJSONObject: value, options: .sortedKeys)).map { String(decoding: $0, as: UTF8.self) } ?? "{}"
+        }
+        if connection.appleAvailable, name.trimmingCharacters(in: .whitespaces).lowercased().hasPrefix("apple") {
+            pendingModel = Self.appleModelKey
+            return json(["changed": true, "model": "Apple, on this iPhone", "applies": "next message"])
+        }
+        guard connection.planAuthorized, let model = ModelFamily.match(name, in: connection.models) else {
+            return json(["changed": false, "available": available])
+        }
+        pendingModel = model.slug
+        return json(["changed": true, "model": model.displayName, "applies": "next message"])
+    }
+
+    private func applyRequestedModel() {
+        guard let requested = pendingModel else { return }
+        pendingModel = nil
+        if requested == Self.appleModelKey { connection.chooseApple(announce: true) } else { connection.choose(requested, announce: true) }
+    }
     // shortcut: session only, lost on relaunch; store with the turn if users miss the button.
     private var consultedByTurn: (turnID: UUID, items: [CoachConsulted])?
     /// What the engine read to answer this turn, in this session; empty for any other turn.

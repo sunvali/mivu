@@ -36,6 +36,16 @@ enum ModelFamily {
         return Resolution(slug: latest.slug, choice: ModelChoice(slug: latest.slug, family: family), upgradedFrom: listed ? remembered.slug : nil)
     }
 
+    /// The listed model someone named in chat: a slug, a full name, or a family word for its newest version.
+    static func match(_ asked: String, in catalog: [AvailableModel]) -> AvailableModel? {
+        let key = asked.replacingOccurrences(of: "\u{2011}", with: "-").trimmingCharacters(in: .whitespaces).lowercased()
+        if let exact = catalog.first(where: { $0.slug.lowercased() == key || $0.displayName.replacingOccurrences(of: "\u{2011}", with: "-").lowercased() == key }) { return exact }
+        if let wanted = parse(key) {
+            return catalog.first { parse($0.displayName).map { $0.family == wanted.family && $0.version == wanted.version } ?? false }
+        }
+        return newest(in: key, of: catalog)
+    }
+
     /// The highest version listed in a family.
     static func newest(in family: String?, of catalog: [AvailableModel]) -> AvailableModel? {
         guard let family else { return nil }

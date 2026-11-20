@@ -62,4 +62,13 @@ struct ModelChoiceTests {
         let choice = ModelChoice(slug: "gpt-6.2-sol", family: "sol")
         #expect(ModelFamily.resolve([], remembered: choice, defaultFamily: "Sol") == .init(slug: "", choice: choice, upgradedFrom: nil))
     }
+
+    @Test func matchesWhatPeopleSay() {
+        #expect(ModelFamily.match("gpt-6.2 astra", in: plus)?.slug == "gpt-6.2-astra")
+        #expect(ModelFamily.match("gpt-6.1-sol", in: plus)?.slug == "gpt-6.1-sol")
+        #expect(ModelFamily.match("Sol", in: plus)?.slug == "gpt-6.2-sol")
+        #expect(ModelFamily.match("GPT\u{2011}6.1 Sol", in: plus)?.slug == "gpt-6.1-sol")
+        #expect(ModelFamily.match("Astra", in: go) == nil)
+        #expect(ModelFamily.match("the smarter one", in: plus) == nil)
+    }
 }

@@ -9,8 +9,12 @@ struct CoachEngine: Sendable {
     let onActivity: @Sendable (CoachActivity) async -> Void
     /// What a reply read, for the side pane's follow-up buttons; nothing is stored.
     let onConsulted: @Sendable (CoachConsulted) async -> Void
-    init(store: DiaryStore, infer: @escaping @Sendable ([CoachInferenceInput], Data) async throws -> CoachInferenceResult, lookup: @escaping @Sendable (String) async throws -> [FoodEvidenceRecord] = { _ in throw FoodEvidenceClient.Failure.notConfigured }, prepareImages: @escaping @Sendable ([Data]) async throws -> [Data] = { $0 }, onActivity: @escaping @Sendable (CoachActivity) async -> Void = { _ in }, onConsulted: @escaping @Sendable (CoachConsulted) async -> Void = { _ in }) {
+    /// Queues a model switch for after this turn and returns the tool result; the turn keeps its own model.
+    let chooseModel: @Sendable (String) async -> String
+    init(store: DiaryStore, infer: @escaping @Sendable ([CoachInferenceInput], Data) async throws -> CoachInferenceResult, lookup: @escaping @Sendable (String) async throws -> [FoodEvidenceRecord] = { _ in throw FoodEvidenceClient.Failure.notConfigured }, prepareImages: @escaping @Sendable ([Data]) async throws -> [Data] = { $0 }, onActivity: @escaping @Sendable (CoachActivity) async -> Void = { _ in }, onConsulted: @escaping @Sendable (CoachConsulted) async -> Void = { _ in },
+         chooseModel: @escaping @Sendable (String) async -> String = { _ in #"{"changed":false,"reason":"unavailable"}"# }) {
         self.store = store; self.infer = infer; self.lookup = lookup; self.prepareImages = prepareImages; self.onActivity = onActivity; self.onConsulted = onConsulted
+        self.chooseModel = chooseModel
     }
     func run(turnID: UUID, expectedProfileID: UUID) async throws -> CoachTurnResult {
         do { return try await attempt(turnID: turnID, expectedProfileID: expectedProfileID, isFinal: false) }
@@ -214,6 +218,7 @@ struct CoachEngine: Sendable {
                             outputs[index] = try coachJSON(records)
                         } catch is CancellationError { throw CancellationError() }
                         catch { outputs[index] = "{\"available\":false,\"reason\":\"Nutrition lookup unavailable. Use clearly uncertain estimates.\"}" }
+                    case .setModel(let name): outputs[index] = await chooseModel(name)
                     case .write: break
                     }
                 }
