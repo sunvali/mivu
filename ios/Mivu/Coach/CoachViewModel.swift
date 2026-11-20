@@ -680,7 +680,7 @@ private final class CoachNavigationReadFence: Sendable {
 
     /// Matches what the person named against their own plan's models; nothing changes until the turn ends.
     func requestModel(_ name: String) -> String {
-        let available = (connection.planAuthorized ? connection.models.map(\.displayName) : []) + (connection.appleAvailable ? ["Apple"] : [])
+        let available = (connection.planAuthorized ? connection.models.map(\.displayName) : []) + (connection.offersApple ? ["Apple"] : [])
         func json(_ value: [String: Any]) -> String {
             (try? JSONSerialization.data(withJSONObject: value, options: .sortedKeys)).map { String(decoding: $0, as: UTF8.self) } ?? "{}"
         }

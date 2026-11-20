@@ -484,7 +484,7 @@ struct CoachView: View {
     @ViewBuilder private var modelControl: some View {
         let connection = coach.connection
         let subtitle = modelSubtitle
-        let choices = (connection.planAuthorized ? connection.models.count : 0) + (connection.appleAvailable ? 1 : 0)
+        let choices = (connection.planAuthorized ? connection.models.count : 0) + (connection.offersApple ? 1 : 0)
         if subtitle.isEmpty {
             EmptyView()
         } else if choices > 1 {
@@ -521,7 +521,7 @@ struct CoachView: View {
             if !chatGPT.isEmpty {
                 Section("ChatGPT") { ForEach(chatGPT, id: \.slug) { Text($0.displayName).tag($0.slug) } }
             }
-            if connection.appleAvailable {
+            if connection.offersApple {
                 Section("On this iPhone") { Text("Apple").tag(CoachViewModel.appleModelKey) }
             }
         }

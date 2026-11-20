@@ -115,6 +115,8 @@ final class ChatGPTConnection {
     func available(_ provider: Provider) -> Bool { provider == .apple ? appleModelAvailable() : planAuthorized }
     var appleAvailable: Bool { appleModelAvailable() }
     var appleSupported: Bool { appleModelSupported() }
+    /// Coach lists Apple only to someone already using it; a ChatGPT Coach is never steered to it.
+    var offersApple: Bool { appleAvailable && provider == .apple }
     var canInfer: Bool { available(provider) }
     /// Only ChatGPT tunes onboarding targets; the formula estimate beats the on-device model there.
     var tunesTargets: Bool { provider == .chatGPT && planAuthorized }
