@@ -533,9 +533,8 @@ struct DiaryRootView: View {
     private func addNote(to id: UUID) {
         guard !model.sampleMode else { noteMealID = id; return }
         guard let selection = model.selection else { return }
-        let meal = model.meal(id)
-        let title = meal?.items.first?.name ?? meal?.submissions.first?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        openCoachAction(nil, reply: CoachReply(target: .meal(mealID: id), excerpt: String((title.isEmpty ? String(localized: "Meal") : title).prefix(280))), expectedSelection: selection)
+        let title = model.meal(id)?.displayTitle ?? String(localized: "Meal")
+        openCoachAction(nil, reply: CoachReply(target: .meal(mealID: id), excerpt: String(title.prefix(280))), expectedSelection: selection)
     }
     private var openCoachAction: OpenDiaryCoachAction {
         coachAction(from: coachRoutes.origin(selection: model.selection, isChangingProfile: model.isChangingProfile))

@@ -236,7 +236,7 @@ struct MealDetailView: View {
         if case .some(.photo(_)) = deletion { return String(localized: "Delete this photo?") }
         if case .some(.food(let item, _)) = deletion { return String(localized: "Delete \(item.name)?") }
         guard let meal = model.meal(mealID), let day = model.day(meal.dayID) else { return String(localized: "Delete meal?") }
-        return String(localized: "Delete “\(displayTitle(meal))” on \(day.localDate)?")
+        return String(localized: "Delete “\(meal.spokenTitle)” on \(day.localDate)?")
     }
     /// `revision` is what the person saw when they chose to delete; a newer meal is refused as stale.
     private func deleteFood(_ item: FoodItem, revision: Int?) async -> Bool {
@@ -256,7 +256,7 @@ struct MealDetailView: View {
         let draft = item.map { item in day.map { String(localized: "About the \(item.name) from \($0): ") } ?? String(localized: "About the \(item.name): ") }
         let target: CoachSeekTarget = meal.sourceTurnID.map { .turn($0) } ?? .day(meal.dayID)
         editedItem = nil
-        let reply = CoachReply(target: item.map { .item(mealID: meal.id, itemID: $0.id) } ?? .meal(mealID: meal.id), excerpt: String((item?.name ?? displayTitle(meal)).prefix(280)))
+        let reply = CoachReply(target: item.map { .item(mealID: meal.id, itemID: $0.id) } ?? .meal(mealID: meal.id), excerpt: String((item?.name ?? meal.displayTitle).prefix(280)))
         if openChat(target, draft: draft, reply: reply, expectedSelection: selection) { dismiss() }
     }
     private func foodRow(_ item: FoodItem, meal: MealReadModel) -> some View {
@@ -299,14 +299,9 @@ struct MealDetailView: View {
             }
         }
     }
-    private func displayTitle(_ meal: MealReadModel) -> String {
-        if let item = meal.items.first { return item.provenance == .sample ? String(localized: "Apple (sample)") : item.name }
-        let note = meal.submissions.first?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return note.isEmpty ? String(localized: "Meal") : note
-    }
     private func mealSummary(_ meal: MealReadModel, snapshot: DiaryReadModel) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(displayTitle(meal))
+            Text(meal.displayTitle).accessibilityLabel(meal.spokenTitle)
                 .font(.title.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
             if meal.timePrecision == .dateOnly {
                 Text(model.day(meal.dayID)?.localDate ?? String(localized: "Historical meal"))

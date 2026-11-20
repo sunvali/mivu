@@ -8,12 +8,12 @@ struct CoachNutrientEdit: Sendable {
 }
 
 enum CoachManualEdit: Sendable {
-    case item(mealID: UUID, item: FoodItem, revision: Int, submissionID: UUID?, explicitNutrients: Set<String>, original: FoodItem)
-    case append(mealID: UUID, items: [FoodItem], revision: Int)
+    case item(mealID: UUID, item: FoodItem, revision: Int, submissionID: UUID?, explicitNutrients: Set<String>, original: FoodItem, title: String? = nil)
+    case append(mealID: UUID, items: [FoodItem], revision: Int, title: String? = nil)
     case accept(mealID: UUID, submissionID: UUID, revision: Int)
     case move(mealID: UUID, date: String, revision: Int, originalDayID: UUID)
     case deleteMeal(mealID: UUID, revision: Int)
-    case deleteItem(mealID: UUID, itemID: UUID, revision: Int)
+    case deleteItem(mealID: UUID, itemID: UUID, revision: Int, title: String? = nil)
     case scaleMeal(mealID: UUID, targetKcal: Double, revision: Int)
     case attach(mealID: UUID, photoIDs: [UUID], role: PhotoRole, revision: Int)
     case deletePhoto(mealID: UUID, photoID: UUID, revision: Int)
@@ -27,19 +27,19 @@ enum CoachManualEdit: Sendable {
 
     var mealID: UUID? {
         switch self {
-        case .item(let id, _, _, _, _, _), .append(let id, _, _), .accept(let id, _, _), .move(let id, _, _, _),
-             .deleteMeal(let id, _), .deleteItem(let id, _, _), .scaleMeal(let id, _, _), .attach(let id, _, _, _), .deletePhoto(let id, _, _), .retry(let id, _): id
+        case .item(let id, _, _, _, _, _, _), .append(let id, _, _, _), .accept(let id, _, _), .move(let id, _, _, _),
+             .deleteMeal(let id, _), .deleteItem(let id, _, _, _), .scaleMeal(let id, _, _), .attach(let id, _, _, _), .deletePhoto(let id, _, _), .retry(let id, _): id
         default: nil
         }
     }
     var target: String {
         switch self {
-        case .item(let id, let item, _, let submission, _, _): "edit_item/\(id)/\(submission?.uuidString ?? "saved")/\(item.id)"
-        case .append(let id, _, _): "append_food/\(id)"
+        case .item(let id, let item, _, let submission, _, _, _): "edit_item/\(id)/\(submission?.uuidString ?? "saved")/\(item.id)"
+        case .append(let id, _, _, _): "append_food/\(id)"
         case .accept(let id, let submission, _): "accept_review/\(id)/\(submission)"
         case .move(let id, _, _, _): "move_meal/\(id)"
         case .deleteMeal(let id, _): "delete_meal/\(id)"
-        case .deleteItem(let id, let item, _): "delete_item/\(id)/\(item)"
+        case .deleteItem(let id, let item, _, _): "delete_item/\(id)/\(item)"
         case .scaleMeal(let id, _, _): "scale_meal/\(id)"
         case .attach(let id, _, _, _): "attach_photos/\(id)"
         case .deletePhoto(let id, let photo, _): "delete_photo/\(id)/\(photo)"
@@ -66,12 +66,12 @@ extension CoachTools {
             object(meal.merging(extra) { _, new in new }, required: ["meal_id", "expected_revision"] + required)
         }
         return [
-            ("edit_item", "Patch only named fields on a retrieved saved or review item. Null name/quantity/unit means unchanged. nutrients lists only changed nutrient totals; a null value clears that nutrient. Preserve other items. Use review_submission_id for an unaccepted proposal; this does not accept it.", mealObject(["item_id": string, "review_submission_id": string, "name": string, "quantity": number, "unit": string, "nutrients": nutrients], required: ["item_id"])),
-            ("append_food", "Append only new foods to an explicitly retrieved existing saved meal; never repeat its current foods. Group all additions to this meal into one call per turn; retries replay that first addition. Returns the committed meal. Use log_food for a new meal.", mealObject(["items": ["type": "array", "items": food]], required: ["items"])),
+            ("edit_item", "Patch only named fields on a retrieved saved or review item. Null name/quantity/unit means unchanged. nutrients lists only changed nutrient totals; a null value clears that nutrient. Preserve other items. Use review_submission_id for an unaccepted proposal; this does not accept it.", mealObject(["item_id": string, "review_submission_id": string, "name": string, "quantity": number, "unit": string, "nutrients": nutrients, "meal_title": mealTitleSchema], required: ["item_id"])),
+            ("append_food", "Append only new foods to an explicitly retrieved existing saved meal; never repeat its current foods. Group all additions to this meal into one call per turn; retries replay that first addition. Returns the committed meal. Use log_food for a new meal.", mealObject(["items": ["type": "array", "items": food], "meal_title": mealTitleSchema], required: ["items"])),
             ("accept_review", "Save an explicitly accepted retrieved meal proposal into totals. Use its submission ID and current meal revision. Never accept an estimate just because the user requests an edit.", mealObject(["submission_id": string], required: ["submission_id"])),
             ("move_meal", "Move an existing retrieved meal's tracking date to target_local_date (yyyy-MM-dd), preserving active waking day and its original capture/eating time and precision. A 04:00 meal can belong to the previous waking day.", mealObject(["target_local_date": string], required: ["target_local_date"])),
             ("delete_meal", "Delete an explicitly requested retrieved meal and its photos. Use its real ID/revision; never delete to compensate for eating.", mealObject([:], required: [])),
-            ("delete_item", "Delete one explicitly requested food from a retrieved saved meal using its real item ID and meal revision. If it is the meal's only food, do not call this; for the only food use ask_clarification kind confirm with that meal.", mealObject(["item_id": string], required: ["item_id"])),
+            ("delete_item", "Delete one explicitly requested food from a retrieved saved meal using its real item ID and meal revision. If it is the meal's only food, do not call this; for the only food use ask_clarification kind confirm with that meal.", mealObject(["item_id": string, "meal_title": mealTitleSchema], required: ["item_id"])),
             ("scale_meal", "Change the whole saved meal's portions proportionally so its known calories total target_kcal (ratio 0.1 to 3 of the current total). Use for requests like \"make this meal 650 kcal\" or \"I only ate about two thirds\"; use edit_item for one food. Needs a retrieved saved meal and its revision; refused for unaccepted estimates or meals with 0 known kcal.", mealObject(["target_kcal": number], required: ["target_kcal"])),
             ("attach_photos", "Attach current turn's actual attachedPhotoIDs to a retrieved meal, preserving the original photo bytes. Choose before/after only when supplied. Does not change food totals; pair with explicit food edits when needed.", mealObject(["photo_ids": ["type": "array", "items": string], "role": ["type": "string", "enum": PhotoRole.allCases.map(\.rawValue)]], required: ["photo_ids", "role"])),
             ("delete_photo", "Delete an explicitly requested photo using a retrieved meal's photo ID and revision. Removes retained copies, without deleting the food.", mealObject(["photo_id": string], required: ["photo_id"])),
@@ -126,7 +126,7 @@ extension CoachTools {
         case "get_goals": try keys(["local_date"], ["local_date"]); return .goals(try date("local_date"))
         case "get_preferences": try keys([], []); return .preferences
         case "edit_item":
-            try keys(mealFields.union(["item_id", "review_submission_id", "name", "quantity", "unit", "nutrients"]), mealFields.union(["item_id"]))
+            try keys(mealFields.union(["item_id", "review_submission_id", "name", "quantity", "unit", "nutrients", "meal_title"]), mealFields.union(["item_id"]))
             let mealID = try id("meal_id"), itemID = try id("item_id"), expected = try revision(allowZero: true)
             let submission = optional("review_submission_id") ? try id("review_submission_id") : nil
             guard let meal = meals.first(where: { $0.id == mealID }) else { throw CoachError.invalidArguments }
@@ -144,10 +144,10 @@ extension CoachTools {
             guard ["name", "unit", "quantity"].contains(where: optional) || !nutrients.isEmpty else { throw CoachError.invalidArguments }
             for edit in nutrients { item.nutrition.set(edit) }
             try validateItems([item])
-            write = .item(mealID: mealID, item: item, revision: expected, submissionID: submission, explicitNutrients: Set(nutrients.map(\.nutrient)), original: original)
+            write = .item(mealID: mealID, item: item, revision: expected, submissionID: submission, explicitNutrients: Set(nutrients.map(\.nutrient)), original: original, title: mealTitle(args))
         case "append_food":
-            try keys(mealFields.union(["items"]), mealFields.union(["items"]))
-            write = .append(mealID: try id("meal_id"), items: try foodItems(args["items"], evidence: evidence), revision: try revision(allowZero: true))
+            try keys(mealFields.union(["items", "meal_title"]), mealFields.union(["items"]))
+            write = .append(mealID: try id("meal_id"), items: try foodItems(args["items"], evidence: evidence), revision: try revision(allowZero: true), title: mealTitle(args))
         case "accept_review":
             try keys(mealFields.union(["submission_id"]), mealFields.union(["submission_id"]))
             write = .accept(mealID: try id("meal_id"), submissionID: try id("submission_id"), revision: try revision(allowZero: true))
@@ -159,12 +159,12 @@ extension CoachTools {
         case "delete_meal":
             try keys(mealFields, mealFields); write = .deleteMeal(mealID: try id("meal_id"), revision: try revision(allowZero: true))
         case "delete_item":
-            try keys(mealFields.union(["item_id"]), mealFields.union(["item_id"]))
+            try keys(mealFields.union(["item_id", "meal_title"]), mealFields.union(["item_id"]))
             let mealID = try id("meal_id"), itemID = try id("item_id")
             // A committed delete replays even though the food is already gone from context.
             let replay = receipts.contains { $0.operationKey.hasSuffix("/delete_item/\(mealID)/\(itemID)") }
             guard replay || meals.first(where: { $0.id == mealID }).map({ meal in meal.items.contains { $0.id == itemID } && meal.items.count > 1 }) == true else { throw CoachError.invalidArguments }
-            write = .deleteItem(mealID: mealID, itemID: itemID, revision: try revision(allowZero: true))
+            write = .deleteItem(mealID: mealID, itemID: itemID, revision: try revision(allowZero: true), title: mealTitle(args))
         case "scale_meal":
             try keys(mealFields.union(["target_kcal"]), mealFields.union(["target_kcal"]))
             let mealID = try id("meal_id")

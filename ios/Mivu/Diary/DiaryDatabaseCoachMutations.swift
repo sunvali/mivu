@@ -126,7 +126,7 @@ extension DiaryTransaction {
         case .deleteWeight(let id, _): guard try exists("weight_tombstone", id) else { throw DiaryError.notFound }; return
         case .deleteWorkout(let id, _): guard try exists("workout_tombstone", id) else { throw DiaryError.notFound }; return
         case .manual(.deleteMeal(let id, _), _): guard try exists("tombstone", id) else { throw DiaryError.notFound }; return
-        case .manual(.deleteItem(let meal, let item, _), _):
+        case .manual(.deleteItem(let meal, let item, _, _), _):
             guard try !mealItems(id: meal).contains(where: { $0.id == item }) else { throw DiaryError.notFound }; return
         case .manual(.deletePhoto(let meal, let photo, _), _):
             _ = try mealRecord(id: meal); guard try photoMetadata(photoID: photo, owner: .meal(meal)) == nil else { throw DiaryError.notFound }; return
@@ -152,7 +152,7 @@ extension DiaryTransaction {
             guard meal.revision == revision, turn.pendingMealID != id || turn.pendingMealRevision == revision else { throw DiaryError.staleRevision }; return meal
         }
         switch write {
-        case .food(let date, let items, let time, _):
+        case .food(let date, let items, let time, _, _):
             guard !items.isEmpty else { throw DiaryError.invalidData }; try validateItems(items); _ = try diaryDateOnlyInstant(date, zone: turn.captureTimeZoneID)
             // After midnight a meal still belongs to the waking day before it.
             if let time { guard time.timeIntervalSince1970.isFinite, [diaryDateLabel(time, zone: turn.captureTimeZoneID), wakingDateLabel(time, zone: turn.captureTimeZoneID)].contains(date) else { throw DiaryError.invalidData } }
@@ -184,11 +184,11 @@ extension DiaryTransaction {
             guard record.revision == revision else { throw DiaryError.staleRevision }
         case .manual(let edit, _):
             switch edit {
-            case .item(let id, let item, let revision, let submissionID, let explicitNutrients, let original):
+            case .item(let id, let item, let revision, let submissionID, let explicitNutrients, let original, _):
                 _ = try meal(id, revision: revision)
                 let items = try submissionID.map { try submission(id: $0, mealID: id).proposal?.items ?? [] } ?? mealItems(id: id)
                 guard items.first(where: { $0.id == item.id }) == original else { throw DiaryError.staleRevision }; try validateItems([diaryCorrectedItem(item, previous: original, explicitNutrients: explicitNutrients)])
-            case .append(let id, let items, let revision): _ = try meal(id, revision: revision); try validateItems(items); guard try mealProjection(id: id).state == .saved else { throw DiaryError.invalidData }
+            case .append(let id, let items, let revision, _): _ = try meal(id, revision: revision); try validateItems(items); guard try mealProjection(id: id).state == .saved else { throw DiaryError.invalidData }
             case .accept(let id, let submissionID, let revision): _ = try meal(id, revision: revision); _ = try submission(id: submissionID, mealID: id)
             case .move(let id, let date, let revision, let day): guard try meal(id, revision: revision).dayID == day else { throw DiaryError.staleRevision }; _ = try diaryDateOnlyInstant(date, zone: turn.captureTimeZoneID)
             case .deleteMeal(let id, let revision), .retry(let id, let revision): _ = try meal(id, revision: revision)
@@ -196,7 +196,7 @@ extension DiaryTransaction {
                 _ = try meal(id, revision: revision)
                 guard !photos.isEmpty, Set(photos).count == photos.count else { throw DiaryError.invalidData }
                 for photo in photos { guard turn.photoIDs.contains(photo), try photoMetadata(photoID: photo, owner: .meal(id)) == nil else { throw DiaryError.notFound } }
-            case .deleteItem(let id, let item, let revision):
+            case .deleteItem(let id, let item, let revision, _):
                 _ = try meal(id, revision: revision); let items = try mealItems(id: id)
                 guard items.contains(where: { $0.id == item }) else { throw DiaryError.notFound }; guard items.count > 1 else { throw DiaryError.invalidData }
             case .scaleMeal(let id, let target, let revision):
@@ -250,6 +250,15 @@ extension DiaryTransaction {
         guard items.allSatisfy({ !ids.contains($0.id) && !names.contains($0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()) }) else { throw DiaryError.invalidData }
         let result = previous + items; try validateItems(result); return result
     }
+    /// Names the meal for its foods as they stand after this write, including foods still awaiting review.
+    // shortcut: Coach undo restores items only, so an undone retitle shows the food names; store the title in coach_undo if owners miss it.
+    private func titleMeal(_ id: UUID, _ text: String?) throws {
+        guard let text else { return }
+        var meal = try mealRecord(id: id)
+        let review = try mealSubmissions(id: id).last { $0.state == .awaitingReview }?.proposal?.items
+        meal.title = MealTitle(text: text, foods: try (review ?? mealItems(id: id)).map(\.name))
+        try saveMeal(meal)
+    }
     private func mealResult(_ id: UUID) throws -> CoachContext.Meal {
         let meal = try mealProjection(id: id)
         return CoachContext.Meal(id: meal.id, dayID: meal.dayID, revision: meal.revision, eatenAt: meal.eatenAt, timePrecision: meal.timePrecision, items: meal.items, state: meal.state)
@@ -257,7 +266,7 @@ extension DiaryTransaction {
     fileprivate func applyCoachWrite(_ write: CoachWrite, turn: CoachTurn, at: Date) throws -> CoachReceipt {
         var receipt = CoachReceipt(operationKey: "\(turn.id)/\(write.target)", turnID: turn.id, dayID: nil, committedRevision: head.revision + 1, resultJSON: "{}")
         switch write {
-        case .food(let date, let items, let time, let review):
+        case .food(let date, let items, let time, let review, let title):
             let day = try coachDay(date, turn: turn), isNew = turn.pendingMealID == nil
             // A time the user stated wins; otherwise food for the send date, or the waking day a late-night send still
             // belongs to, takes the send time and other dates stay date-only.
@@ -289,6 +298,7 @@ extension DiaryTransaction {
                 try database.execute("INSERT INTO photo_consumer(ownerKind, parentID, photoID, turnID) VALUES ('meal', ?, ?, ?)", [.text(meal.id.uuidString), .text(photo.photoID.uuidString), .text(turn.id.uuidString)])
                 try removePhoto(photoID: photo.photoID, owner: photo.owner)
             }
+            try titleMeal(meal.id, title)
             receipt.dayID = day.id; receipt.mealID = meal.id; receipt.resultJSON = try coachJSON(mealResult(meal.id))
         case .correction(let id, let item, _):
             var meal = try mealRecord(id: id), items = try mealItems(id: id)
@@ -350,8 +360,8 @@ extension DiaryTransaction {
             // A capture placeholder has no saved items; deleting it would strand its turn, so it gets no undo.
             guard let id = turn.pendingMealID else { return [] }
             let items = try mealItems(id: id); return items.isEmpty ? nil : items
-        case .correction(let id, _, _), .manual(.item(let id, _, _, _, _, _), _), .manual(.append(let id, _, _), _),
-             .manual(.deleteItem(let id, _, _), _), .manual(.scaleMeal(let id, _, _), _): return try mealItems(id: id)
+        case .correction(let id, _, _), .manual(.item(let id, _, _, _, _, _, _), _), .manual(.append(let id, _, _, _), _),
+             .manual(.deleteItem(let id, _, _, _), _), .manual(.scaleMeal(let id, _, _), _): return try mealItems(id: id)
         default: return nil
         }
     }
@@ -415,13 +425,15 @@ extension DiaryTransaction {
     }
     private func applyManual(_ edit: CoachManualEdit, turn: CoachTurn, at: Date, receipt: inout CoachReceipt) throws {
         switch edit {
-        case .item(let id, let item, _, let submissionID, let explicitNutrients, _):
+        case .item(let id, let item, _, let submissionID, let explicitNutrients, _, let title):
             try editItem(mealID: id, item: item, explicitNutrients: explicitNutrients, reviewSubmissionID: submissionID, expectedRevision: nil)
+            try titleMeal(id, title)
             receipt.mealID = id; receipt.itemID = item.id; receipt.dayID = try mealRecord(id: id).dayID; receipt.resultJSON = try coachJSON(mealResult(id))
-        case .append(let id, let items, _):
+        case .append(let id, let items, _, let title):
             let meal = try mealRecord(id: id), submissionID = UUID(), previous = try mealItems(id: id)
             try saveSubmission(MealSubmission(id: submissionID, baseRevision: meal.revision, text: turn.text, photoIDs: [], reviewFirst: false), meal: meal)
             try applyAnalysis(AnalysisOutput(profileID: head.profile.id, mealID: id, submissionID: submissionID, baseRevision: meal.revision, items: previous + items))
+            try titleMeal(id, title)
             receipt.dayID = meal.dayID; receipt.mealID = id; receipt.resultJSON = try coachJSON(mealResult(id))
         case .accept(let id, let submissionID, _):
             try acceptReview(mealID: id, submissionID: submissionID)
@@ -444,8 +456,9 @@ extension DiaryTransaction {
                 if owner == .coachTurn(turn.id) { try removePhoto(photoID: photoID, owner: owner) }
             }
             receipt.dayID = try mealRecord(id: id).dayID; receipt.mealID = id; receipt.resultJSON = try coachJSON(mealResult(id))
-        case .deleteItem(let id, let item, _):
+        case .deleteItem(let id, let item, _, let title):
             try deleteItem(mealID: id, itemID: item, expectedRevision: nil)
+            try titleMeal(id, title)
             receipt.mealID = id; receipt.itemID = item; receipt.dayID = try mealRecord(id: id).dayID; receipt.resultJSON = try coachJSON(mealResult(id))
         case .scaleMeal(let id, let target, _):
             try scaleMeal(mealID: id, targetKcal: target, expectedRevision: nil)
