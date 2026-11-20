@@ -337,7 +337,7 @@ extension ConnectionTests {
     let connection: ChatGPTConnection
     let session: URLSession
 
-    init(permission: Bool = true, appleAvailable: Bool = false, response: (@Sendable (URLRequest) throws -> SessionReply)? = nil,
+    init(permission: Bool = true, appleAvailable: Bool = false, catalog: String? = nil, response: (@Sendable (URLRequest) throws -> SessionReply)? = nil,
          revocation: (@Sendable (URLRequest) throws -> SessionReply)? = nil) throws {
         preferences = UserDefaults(suiteName: preferencesName)!
         let saved = savedCredentials(now: .now, expired: false)
@@ -352,7 +352,7 @@ extension ConnectionTests {
         let session = syntheticSession { request in
             requests.append(request)
             switch request.url?.path {
-            case "/v1/models": return connectionCatalog()
+            case "/v1/models": return catalog.map { SessionReply(status: 200, data: Data($0.utf8)) } ?? connectionCatalog()
             case "/v1/responses":
                 let saved = try #require(try jobStore.load())
                 #expect(saved.state != .completed)
@@ -917,5 +917,69 @@ extension ConnectionTests {
         #expect(!harness.connection.isCheckingEligibility)
         #expect(!harness.connection.showsPlanWelcome)
         #expect(harness.connection.showsNotEligibleNotice)
+    }
+}
+
+/// Synthetic catalogs shaped like ChatGPT's model names.
+private func familyCatalog(_ names: [String]) -> String {
+    let models = names.map { #"{"slug":"\#($0.lowercased().replacingOccurrences(of: " ", with: "-"))","display_name":"\#($0)","visibility":"list"}"# }
+    return #"{"models":[\#(models.joined(separator: ","))]}"#
+}
+
+extension ConnectionTests {
+    @Test func choiceIsRememberedPerRegistration() async throws {
+        let fixture = try ConnectionFixture()
+        defer { fixture.cleanup() }
+        await fixture.connection.restore()
+        fixture.connection.choose("not-listed")
+        #expect(fixture.connection.selectedModel == "fixture-model")
+        fixture.connection.choose("second-model")
+        #expect(fixture.connection.selectedModel == "second-model")
+        #expect(fixture.connection.modelNotice == nil)
+        fixture.connection.choose("second-model", announce: true)
+        #expect(fixture.connection.modelNotice == nil, "Asking for the current model changes nothing to announce")
+        #expect(fixture.preferences.data(forKey: "modelChoice." + fixture.credentials.registrationID) != nil)
+        let relaunched = fixture.relaunched()
+        await relaunched.restore()
+        #expect(relaunched.selectedModel == "second-model")
+    }
+
+    @Test func upgradeSetsNoticeAndUndoHoldsBack() async throws {
+        let fixture = try ConnectionFixture(catalog: familyCatalog(["GPT-6.1 Sol", "GPT-6.2 Sol", "GPT-6.2 Astra"]))
+        defer { fixture.cleanup() }
+        let key = "modelChoice." + fixture.credentials.registrationID
+        fixture.preferences.set(try JSONEncoder().encode(ModelChoice(slug: "gpt-6.1-sol", family: "sol")), forKey: key)
+        await fixture.connection.restore()
+        #expect(fixture.connection.selectedModel == "gpt-6.2-sol")
+        #expect(fixture.connection.modelNotice == ModelNotice(kind: .upgraded, from: "GPT-6.1 Sol", to: "GPT-6.2 Sol", undoSlug: "gpt-6.1-sol"))
+        fixture.connection.undoModelChange()
+        #expect(fixture.connection.selectedModel == "gpt-6.1-sol")
+        #expect(fixture.connection.modelNotice == nil)
+        let relaunched = fixture.relaunched()
+        await relaunched.restore()
+        #expect(relaunched.selectedModel == "gpt-6.1-sol")
+        #expect(relaunched.modelNotice == nil)
+    }
+
+    @Test func goCatalogSelectsOnlyModelAndForgetsLostFamily() async throws {
+        let fixture = try ConnectionFixture(catalog: familyCatalog(["GPT-6.2 Go"]))
+        defer { fixture.cleanup() }
+        let key = "modelChoice." + fixture.credentials.registrationID
+        fixture.preferences.set(try JSONEncoder().encode(ModelChoice(slug: "gpt-6.2-astra", family: "astra")), forKey: key)
+        fixture.preferences.set("Sol", forKey: "coachModelFamily")
+        await fixture.connection.restore()
+        #expect(fixture.connection.selectedModel == "gpt-6.2-go")
+        #expect(fixture.connection.modelNotice == nil)
+        #expect(fixture.preferences.data(forKey: key) == nil)
+        #expect(fixture.connection.canCapture)
+    }
+
+    @Test func newcomerFollowsConfiguredFamily() async throws {
+        let fixture = try ConnectionFixture(catalog: familyCatalog(["GPT-6.2 Luna", "GPT-6.2 Sol", "GPT-6.2 Astra"]))
+        defer { fixture.cleanup() }
+        fixture.preferences.set("Astra", forKey: "coachModelFamily")
+        await fixture.connection.restore()
+        #expect(fixture.connection.selectedModel == "gpt-6.2-astra")
+        #expect(fixture.connection.selectedModelName == "GPT-6.2 Astra")
     }
 }

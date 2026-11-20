@@ -41,7 +41,7 @@ struct ConnectionProofView: View {
                     if connection.isLoadingModels {
                         ProgressView("Loading account models")
                     } else if !connection.models.isEmpty {
-                        Picker("Account model", selection: $connection.selectedModel) {
+                        Picker("Account model", selection: Binding(get: { connection.selectedModel }, set: { connection.choose($0) })) {
                             ForEach(connection.models, id: \.slug) { Text($0.displayName).tag($0.slug) }
                         }
                         .frame(minHeight: 44)

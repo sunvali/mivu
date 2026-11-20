@@ -314,7 +314,7 @@ struct SettingsView: View {
                         ChatGPTConnectButton(connection: connection).frame(minHeight: 44)
                     }
                     if !connection.models.isEmpty {
-                        Picker("Account model", selection: $connection.selectedModel) {
+                        Picker("Account model", selection: Binding(get: { connection.selectedModel }, set: { connection.choose($0) })) {
                             ForEach(connection.models, id: \.slug) { Text($0.displayName).tag($0.slug) }
                         }
                     }

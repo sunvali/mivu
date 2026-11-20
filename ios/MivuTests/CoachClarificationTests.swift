@@ -11,6 +11,11 @@ private actor Replies {
     }
 }
 
+private actor AskedModels {
+    var names: [String] = []
+    func add(_ name: String) { names.append(name) }
+}
+
 @Suite @MainActor struct CoachClarificationTests {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
     private func fixture() async throws -> (DiaryStore, DiaryProfile, URL) {
@@ -34,6 +39,31 @@ private actor Replies {
     private func run(_ store: DiaryStore, _ profile: DiaryProfile, _ turn: CoachTurn, _ results: [CoachInferenceResult]) async throws -> CoachTurnResult {
         let replies = Replies(results)
         return try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+    }
+
+    @Test func setModelToolReportsChangeAndReplies() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let turn = try await capturedTurn(store, text: "Use Astra from now on", photos: [], at: now, expectedProfileID: profile.id)
+        let asked = AskedModels()
+        let replies = Replies([result([call("set_model", #"{"model":"Astra"}"#)]), result(text: "Done. I'll use GPT-6.2 Astra from your next message.")])
+        let finished = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }, chooseModel: { name in
+            await asked.add(name); return #"{"changed":true,"model":"GPT-6.2 Astra","applies":"next message"}"#
+        }).run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(await asked.names == ["Astra"])
+        #expect(finished.state == .completed && finished.assistantText == "Done. I'll use GPT-6.2 Astra from your next message.")
+    }
+
+    /// An unclear model request is answered in words, so no new saved question kind reaches backups.
+    @Test func unknownModelIsAnsweredInText() async throws {
+        let (store, profile, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let turn = try await capturedTurn(store, text: "Use the smarter one", photos: [], at: now, expectedProfileID: profile.id)
+        let reply = "Your plan has GPT-6.2 Sol and GPT-6.2 Astra. Which one? You can also pick from the menu under the Coach title."
+        let replies = Replies([result([call("set_model", #"{"model":"smarter"}"#)]), result(text: reply)])
+        let finished = try await CoachEngine(store: store, infer: { try await replies.infer($0, $1) }, chooseModel: { _ in
+            #"{"changed":false,"available":["GPT-6.2 Sol","GPT-6.2 Astra"]}"#
+        }).run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(finished.state == .completed && finished.assistantText == reply)
+        #expect(try await exportedTurn(store, turnID: turn.id, expectedProfileID: profile.id).question == nil)
     }
 
     @Test func candidatesPersistAndFeedNextTurn() async throws {

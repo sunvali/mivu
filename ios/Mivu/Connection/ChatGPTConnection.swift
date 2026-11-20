@@ -27,6 +27,16 @@ enum ConnectionNotice: String {
     case unconfirmed = "Local credentials removed. Remote revocation unconfirmed."
 }
 
+/// A model change shown once in Coach; it is never saved to the diary.
+struct ModelNotice: Equatable {
+    enum Kind { case changed, upgraded, reanswering }
+    let kind: Kind
+    let from: String
+    let to: String
+    /// The ChatGPT model Undo returns to; nil when there is nothing to undo.
+    let undoSlug: String?
+}
+
 @Observable @MainActor
 final class ChatGPTConnection {
     private(set) var accountState: ProofState = .disconnected
@@ -34,6 +44,8 @@ final class ChatGPTConnection {
     private(set) var lastCompletedProbe: ProbeResult?
     private(set) var models: [AvailableModel] = []
     var selectedModel = ""
+    private(set) var modelNotice: ModelNotice?
+    var selectedModelName: String? { models.first { $0.slug == selectedModel }?.displayName }
     private(set) var job: ProbeJob?
     private(set) var notice: ConnectionNotice?
     private(set) var failureDiagnostic: ResponseFailureDiagnostic?
@@ -103,6 +115,8 @@ final class ChatGPTConnection {
     func available(_ provider: Provider) -> Bool { provider == .apple ? appleModelAvailable() : planAuthorized }
     var appleAvailable: Bool { appleModelAvailable() }
     var appleSupported: Bool { appleModelSupported() }
+    /// The models Coach may list: only the Coach AI chosen in Settings, never the other provider's.
+    var coachModels: [AvailableModel] { provider == .chatGPT && planAuthorized ? models : [] }
     var canInfer: Bool { available(provider) }
     /// Only ChatGPT tunes onboarding targets; the formula estimate beats the on-device model there.
     var tunesTargets: Bool { provider == .chatGPT && planAuthorized }
@@ -265,12 +279,60 @@ final class ChatGPTConnection {
             guard revision == generation else { return }
             let catalog = try await client.models(accessToken: token)
             guard revision == generation else { return }
-            models = catalog
-            if !catalog.contains(where: { $0.slug == selectedModel }) { selectedModel = catalog.first?.slug ?? "" }
+            adopt(catalog)
         } catch {
             guard revision == generation else { return }
             await reflectFailure(error, revision: revision)
         }
+    }
+
+    /// The person's ChatGPT pick: remembered for this account and followed to newer versions of its family.
+    /// Apple versus ChatGPT stays the Settings choice, so this never changes the provider.
+    func choose(_ slug: String, announce: Bool = false) {
+        guard let model = models.first(where: { $0.slug == slug }) else { return }
+        let previous = models.first { $0.slug == selectedModel }
+        remember(ModelChoice(slug: slug, family: ModelFamily.parse(model.displayName)?.family))
+        selectedModel = slug
+        modelNotice = announce ? previous.flatMap {
+            $0.slug == slug ? nil : ModelNotice(kind: .changed, from: $0.displayName, to: model.displayName, undoSlug: $0.slug)
+        } : nil
+    }
+
+    static let appleName = String(localized: "Apple · on this iPhone")
+
+    /// After an upgrade, Undo holds the older version until a newer one than the declined appears.
+    func undoModelChange() {
+        defer { modelNotice = nil }
+        guard let notice = modelNotice, let slug = notice.undoSlug, let model = models.first(where: { $0.slug == slug }) else { return }
+        remember(ModelChoice(slug: slug, family: ModelFamily.parse(model.displayName)?.family,
+                             declinedSlug: notice.kind == .upgraded ? selectedModel : nil))
+        selectedModel = slug
+    }
+
+    func noteReanswering() {
+        if let name = selectedModelName { modelNotice = ModelNotice(kind: .reanswering, from: name, to: name, undoSlug: nil) }
+    }
+
+    func dismissModelNotice() { modelNotice = nil }
+
+    private var choiceKey: String? { activeRegistrationID.map { "modelChoice." + $0 } }
+
+    private func remember(_ choice: ModelChoice?) {
+        guard let choiceKey else { return }
+        if let choice, let data = try? JSONEncoder().encode(choice) { preferences.set(data, forKey: choiceKey) }
+        else { preferences.removeObject(forKey: choiceKey) }
+    }
+
+    /// shortcut: an upgrade found while Coach is answering re-answers like any switch; catalogs load at connect and launch, so it is rare.
+    private func adopt(_ catalog: [AvailableModel]) {
+        models = catalog
+        let saved = choiceKey.flatMap { preferences.data(forKey: $0) }.flatMap { try? JSONDecoder().decode(ModelChoice.self, from: $0) }
+        let result = ModelFamily.resolve(catalog, remembered: saved, defaultFamily: preferences.string(forKey: "coachModelFamily"))
+        if saved != nil { remember(result.choice) }
+        if provider == .chatGPT, let from = result.upgradedFrom, let old = catalog.first(where: { $0.slug == from }), let new = catalog.first(where: { $0.slug == result.slug }) {
+            modelNotice = ModelNotice(kind: .upgraded, from: old.displayName, to: new.displayName, undoSlug: from)
+        }
+        selectedModel = result.slug
     }
 
     /// One tiny request that tells whether OpenAI lets this account's plan be used here; temporary failures change nothing.
@@ -291,8 +353,7 @@ final class ChatGPTConnection {
             preferences.removeObject(forKey: "notEligibleRegistrationID")
             apply(await auth.snapshot())
             guard revision == generation, planAuthorized else { return }
-            models = catalog
-            if !catalog.contains(where: { $0.slug == selectedModel }) { selectedModel = catalog.first?.slug ?? "" }
+            adopt(catalog)
             resumePending()
         } catch ResponsesClient.Failure.notEligible {
             guard revision == generation else { return }
@@ -498,7 +559,7 @@ final class ChatGPTConnection {
 
     private func apply(_ snapshot: SessionSnapshot?) {
         #if DEBUG
-        if isNotEligibleFixture { return }
+        if isAccountFixture { return }
         #endif
         activeRegistrationID = snapshot?.registrationID
         planScopeGranted = snapshot?.planPermissionGranted ?? false
@@ -573,9 +634,15 @@ final class ChatGPTConnection {
     }
 
     #if DEBUG
-    /// UI tests only: a signed-in account whose plan OpenAI won't share. It has no saved session, so lifecycle re-applies keep it.
-    @ObservationIgnored private var isNotEligibleFixture = false
-    func applyNotEligibleFixture() { isNotEligibleFixture = true; activeRegistrationID = "fixture-registration"; accountState = .planNotEligible }
+    /// UI tests only: a fixture account has no saved session, so lifecycle re-applies keep it.
+    @ObservationIgnored private var isAccountFixture = false
+    func applyNotEligibleFixture() { isAccountFixture = true; activeRegistrationID = "fixture-registration"; accountState = .planNotEligible }
+    /// UI tests only: a connected account offering two synthetic models.
+    func applyModelMenuFixture() {
+        isAccountFixture = true; activeRegistrationID = "fixture-registration"; accountState = .connected
+        models = [AvailableModel(slug: "fixture-sol", displayName: "GPT-6.2 Sol"), AvailableModel(slug: "fixture-astra", displayName: "GPT-6.2 Astra")]
+        selectedModel = "fixture-sol"
+    }
     #endif
 
     private func markNotEligible(_ snapshot: SessionSnapshot?) {

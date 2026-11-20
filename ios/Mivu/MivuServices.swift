@@ -34,6 +34,7 @@ import UIKit
                                                                         appleModelSupported: appleModelSupported)
         #if DEBUG
         if DiaryLaunch.isPlanNotEligibleFixture { session.applyNotEligibleFixture() }
+        if DiaryLaunch.isModelMenuFixture { session.applyModelMenuFixture() }
         #endif
         let keys = NutritionAPIKeyStore.local
         let foodSource = FoodEvidenceClient()

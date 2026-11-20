@@ -56,6 +56,7 @@ enum CoachCommand: Sendable {
     case progress(endingOn: String, days: Int)
     case workout(UUID)
     case write(CoachWrite)
+    case setModel(String)
 
     /// New foods remember the model that estimated them; edits keep the food's original source.
     func estimated(by model: String) -> CoachCommand {
@@ -98,6 +99,7 @@ enum CoachTools {
         let workout: [String: Any] = ["kind": ["type": "string", "enum": ["strength", "cardio", "other"]], "duration_minutes": integer, "exercises": ["type": "array", "items": exercise], "estimated_burn_kcal": number, "burn_source": ["type": ["string", "null"], "enum": ["userEstimate", "modelEstimate", NSNull()]], "performed_at": unconfirmedTime]
         let schemas: [(String, String, [String: Any])] = [
             ("ask_clarification", "Ask before logging only when food, serving, day or an existing record is genuinely ambiguous. Unknown exact grams or milliliters alone do not block a clearly labelled estimate from text, photos or a clear matching committed portion. Choose portion for an ambiguous serving, food only when no reasonable food guess exists, day for the recording date, meal or workout for an ambiguous existing record. Use this tool alone in its call. When a message names several foods, log the clear ones before asking. For the one unclear food, set about to the person's name for it without the amount, and options to 2 or 3 short plain names of the most likely foods it could be; the app shows them as one-tap answers. Add candidates (at most 4 real meal_id, optional item_id) when the choice is among known records. Use kind confirm with exactly one meal candidate (meal_id only) before deleting a whole meal. The app displays its own question; the user answers in a new turn.", object(["kind": ["type": "string", "enum": CoachClarification.allCases.map(\.rawValue)], "candidates": ["type": "array", "maxItems": 4, "items": object(["meal_id": string, "item_id": string], required: ["meal_id"])], "about": string, "options": ["type": "array", "maxItems": 3, "items": string]], required: ["kind"])),
+            ("set_model", "Switch which ChatGPT model answers from the next message on, only when the person asks to change models. Pass the model's name as they said it. If the result says changed false, reply in one short line naming the available models it lists, if any, and say they can also pick one from the menu under the Coach title; never call ask_clarification for this. Never claim a switch unless the result says changed true.", object(["model": string], required: ["model"])),
             ("get_progress", "Read actual progress for an inclusive 1, 7 or 30 calendar-day window. Real record IDs/revisions and omitted counts support historical corrections. Food remaining and estimated burn are separate; adherence means Within 10% of target.", object(["ending_on": string, "days": ["type": "integer", "enum": [1, 7, 30]]], required: ["ending_on", "days"])),
             ("get_workout", "Read a complete owned workout before replacement/edit. Oversized records are refused; never replace unseen sets.", object(["workout_id": string], required: ["workout_id"])),
             ("log_weight", "Log one weight per date. Corrections require expected_revision; historical correction after travel must use retrieved weight_id, preserving day and measured time. Model measured_at cannot confirm exact time. Current morning weight explicitly starts that waking day.", object(["local_date": string, "value": ["type": "number"], "unit": ["type": "string", "enum": ["kg", "lb"]], "weight_id": string, "expected_revision": integer, "measured_at": unconfirmedTime], required: ["local_date", "value", "unit"])),
@@ -230,6 +232,9 @@ enum CoachTools {
             return .write(.deleteWorkout(id: try uuid("workout_id"), revision: try revision()))
         case "get_context": try keys([], []); return .context
         case "get_meal": try keys(["meal_id"], ["meal_id"]); return .meal(try uuid("meal_id"))
+        case "set_model":
+            try keys(["model"], ["model"]); let name = try string("model")
+            guard !name.isEmpty, name.utf8.count <= 100 else { throw CoachError.invalidArguments }; return .setModel(name)
         case "lookup_nutrition":
             try keys(["query"], ["query"]); let query = try string("query")
             guard query.utf8.count <= 200 else { throw CoachError.invalidArguments }; return .lookup(query)

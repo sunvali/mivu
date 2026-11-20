@@ -74,6 +74,24 @@
       "type" : "function"
     },
     {
+      "description" : "Switch which ChatGPT model answers from the next message on, only when the person asks to change models. Pass the model's name as they said it. If the result says changed false, reply in one short line naming the available models it lists, if any, and say they can also pick one from the menu under the Coach title; never call ask_clarification for this. Never claim a switch unless the result says changed true.",
+      "name" : "set_model",
+      "parameters" : {
+        "additionalProperties" : false,
+        "properties" : {
+          "model" : {
+            "type" : "string"
+          }
+        },
+        "required" : [
+          "model"
+        ],
+        "type" : "object"
+      },
+      "strict" : true,
+      "type" : "function"
+    },
+    {
       "description" : "Read actual progress for an inclusive 1, 7 or 30 calendar-day window. Real record IDs/revisions and omitted counts support historical corrections. Food remaining and estimated burn are separate; adherence means Within 10% of target.",
       "name" : "get_progress",
       "parameters" : {

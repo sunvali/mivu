@@ -53,7 +53,11 @@ private func isOlder(_ version: String, than other: String) -> Bool { version.co
         if let item = await store?.results.first {
             available = isOlder(version, than: item.version) && now.timeIntervalSince(item.currentVersionReleaseDate) >= 7 * 86_400 ? item.version : nil
         }
-        if let config = await config { minimum = config.ios }
+        if let config = await config {
+            minimum = config.ios
+            // The model family people get before they pick one; see `ModelFamily.resolve`.
+            defaults.set(config.coachModelFamily, forKey: "coachModelFamily")
+        }
     }
 
     /// Once per version, then once more a week after the first dismissal.
@@ -76,7 +80,7 @@ private func isOlder(_ version: String, than other: String) -> Bool { version.co
         struct Item: Decodable { let version: String; let currentVersionReleaseDate: Date }
         let results: [Item]
     }
-    private struct Config: Decodable { let ios: String? }
+    private struct Config: Decodable { let ios: String?; let coachModelFamily: String? }
 
     private func fetch<Value: Decodable>(_ type: Value.Type, from url: URL) async -> Value? {
         guard let (data, response) = try? await session.data(for: URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)),

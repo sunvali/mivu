@@ -184,6 +184,48 @@ import Testing
         }
     }
 
+    /// The turn keeps its model to the end, so the switch lands after the reply and is announced with Undo.
+    @Test func coachAskedSwitchAppliesAfterTheReply() async throws {
+        let attempts = CoachConnectionRequests()
+        let fixture = try CoachConnectionFixture(response: {
+            attempts.append()
+            return attempts.count == 1 ? coachConnectionSetModel() : coachConnectionTextCompletion()
+        })
+        defer { fixture.cleanup() }
+        await fixture.connection.restore()
+        let store = DiaryStore(directory: fixture.directory.appending(path: "Diary"))
+        _ = try await store.createProfile(DiaryProfile(name: "Synthetic model switch"))
+        let diary = DiaryViewModel(store: store)
+        await diary.load(createDefaultProfile: false)
+        let coach = CoachViewModel(diary: diary, connection: fixture.connection, sleep: { _ in })
+        coach.draft.text = "Use the second synthetic model"
+        #expect(await coach.send())
+        await coach.waitForWorker()
+        #expect((try? await diary.store.snapshotForExport())?.coachTurns.first?.state == .completed)
+        #expect(fixture.connection.selectedModel == "second-model")
+        #expect(fixture.connection.modelNotice == ModelNotice(kind: .changed, from: "Synthetic", to: "Second synthetic", undoSlug: "fixture-model"))
+    }
+
+    /// Coach lists only the models of the Coach AI chosen in Settings, never the other provider's.
+    @Test func chatGPTCoachNeverSuggestsApple() async throws {
+        let fixture = try CoachConnectionFixture(appleAvailable: true, response: coachConnectionTextCompletion)
+        defer { fixture.cleanup() }
+        await fixture.connection.restore()
+        #expect(fixture.connection.provider == .chatGPT)
+        #expect(fixture.connection.coachModels.map(\.slug) == ["fixture-model", "second-model"])
+        let diary = DiaryViewModel(store: DiaryStore(directory: fixture.directory.appending(path: "Diary")))
+        let coach = CoachViewModel(diary: diary, connection: fixture.connection, sleep: { _ in })
+        #expect(!coach.requestModel("the smarter one").contains("Apple"))
+        #expect(coach.requestModel("Apple").contains(#""changed":false"#))
+        #expect(fixture.connection.provider == .chatGPT)
+        // Apple chosen in Settings: Coach offers no ChatGPT models, and neither chat nor Settings' model picker leaves Apple.
+        fixture.connection.provider = .apple
+        #expect(fixture.connection.coachModels.isEmpty)
+        #expect(coach.requestModel("Second synthetic").contains(#""changed":false"#))
+        fixture.connection.choose("second-model")
+        #expect(fixture.connection.provider == .apple)
+    }
+
     @Test func profileChangeDuringUsageRetryDelayStopsBeforeAnotherRequest() async throws {
         let attempts = CoachConnectionRequests()
         let fixture = try CoachConnectionFixture(response: {
@@ -286,6 +328,9 @@ private final class CoachCredentialStore: CredentialStoring, @unchecked Sendable
 
 private func coachConnectionCompletion() -> SessionReply {
     SessionReply(status: 200, data: Data("event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"model\":\"fixture-model\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"Synthetic guidance\"}]},{\"type\":\"function_call\",\"id\":\"synthetic-id\",\"call_id\":\"synthetic-call\",\"name\":\"get_context\",\"namespace\":\"mivu\",\"arguments\":\"{}\"}]}}\n\n".utf8))
+}
+private func coachConnectionSetModel() -> SessionReply {
+    SessionReply(status: 200, data: Data("event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"model\":\"fixture-model\",\"output\":[{\"type\":\"function_call\",\"id\":\"synthetic-id\",\"call_id\":\"synthetic-call\",\"name\":\"set_model\",\"namespace\":\"mivu\",\"arguments\":\"{\\\"model\\\":\\\"Second synthetic\\\"}\"}]}}\n\n".utf8))
 }
 private func coachConnectionTextCompletion() -> SessionReply {
     SessionReply(status: 200, data: Data("event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"model\":\"fixture-model\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"Synthetic guidance\"}]}]}}\n\n".utf8))

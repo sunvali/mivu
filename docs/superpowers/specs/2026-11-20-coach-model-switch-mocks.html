@@ -1,0 +1,173 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px 12px;padding:4px 0}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:8px}
+  .tag{font:600 13px var(--font-sans);color:var(--foreground);text-align:center}
+  .tag small{display:block;font-weight:400;color:var(--muted-foreground);font-size:12px;margin-top:2px;line-height:1.35}
+  .frame{width:222px;height:470px;overflow:hidden;border-radius:30px;box-shadow:0 0 0 6px #1b1d1f,0 6px 18px rgba(0,0,0,.25)}
+  .phone{width:390px;height:826px;transform:scale(.5693);transform-origin:top left;position:relative;background:#F3F6F7;
+    font-family:-apple-system,"SF Pro Text",system-ui,sans-serif;color:#111;overflow:hidden}
+  .sb{height:54px;display:flex;justify-content:space-between;align-items:center;padding:0 34px;font:600 17px -apple-system,system-ui}
+  .nav{display:flex;align-items:center;justify-content:space-between;padding:6px 20px 0}
+  .title{font:700 34px -apple-system,system-ui;letter-spacing:.2px}
+  .glassbtn{width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,.75);box-shadow:0 0 0 1px rgba(0,0,0,.08),0 2px 6px rgba(0,0,0,.06);
+    display:inline-flex;align-items:center;justify-content:center;margin-left:10px;font-size:20px}
+  .sub{display:inline-flex;align-items:center;gap:5px;margin:2px 20px 0;font:500 15px -apple-system,system-ui;color:#0B6E73}
+  .sub .chev{font-size:11px}
+  .day{display:flex;align-items:center;gap:10px;margin:22px 20px 10px;color:#666;font-size:14px}
+  .day:before,.day:after{content:"";flex:1;height:1px;background:#bbb}
+  .user{margin:8px 20px 4px auto;max-width:280px;background:#0B7A80;color:#fff;border-radius:22px;padding:12px 16px;font-size:16px;width:fit-content}
+  .saved{text-align:right;margin:0 20px;color:#777;font-size:12px}
+  .reply{margin:12px 20px;font-size:16px;line-height:1.35}
+  .card{margin:6px 20px;background:#fff;border-radius:18px;padding:14px 16px;font-size:15px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .card b{font-size:15px}
+  .muted{color:#777}
+  .pip{position:absolute;left:18px;bottom:150px;width:78px;height:78px;border-radius:50%;
+    background:radial-gradient(circle at 50% 55%,#F4A35B 0 42%,transparent 43%),radial-gradient(circle at 50% 80%,#2C8C8F 0 30%,transparent 31%);}
+  .composer{position:absolute;left:0;right:0;bottom:84px;padding:0 16px}
+  .crow{display:flex;gap:10px;align-items:center}
+  .field{flex:1;height:52px;border-radius:26px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.06);display:flex;align-items:center;padding:0 18px;color:#aaa;font-size:17px;justify-content:space-between}
+  .field .mic{color:#0B7A80}
+  .cam{width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.8);box-shadow:0 0 0 1px rgba(0,0,0,.08);display:flex;align-items:center;justify-content:center;font-size:20px}
+  .foot{margin:10px 4px 0;font-size:13px;color:#666;display:flex;align-items:center;gap:6px}
+  .chip{display:inline-flex;align-items:center;gap:4px;padding:6px 10px;border-radius:14px;background:rgba(11,122,128,.1);color:#0B6E73;font-weight:600;font-size:13px}
+  .tabs{position:absolute;left:14px;right:14px;bottom:14px;height:62px;border-radius:31px;background:rgba(255,255,255,.8);box-shadow:0 0 0 1px rgba(0,0,0,.08);
+    display:flex;justify-content:space-around;align-items:center;font-size:11px;color:#222}
+  .tabs div{text-align:center}.tabs .on{color:#0B7A80;background:#e8eced;border-radius:24px;padding:6px 18px}
+  .menu{position:absolute;width:268px;background:rgba(250,251,251,.94);border-radius:24px;box-shadow:0 0 0 1px rgba(0,0,0,.07),0 18px 40px rgba(0,0,0,.18);padding:6px 0;z-index:5}
+  .mh{font-size:13px;color:#888;padding:8px 18px 6px}
+  .mi{display:flex;align-items:center;gap:10px;padding:11px 18px;font-size:17px;min-height:24px}
+  .mi .ck{width:16px;color:#111;font-weight:700}
+  .mi .d{display:block;font-size:13px;color:#888}
+  .msep{height:1px;background:rgba(0,0,0,.08);margin:4px 0}
+  .dim{position:absolute;inset:0;background:rgba(0,0,0,.04);z-index:4}
+  .sys{display:flex;align-items:center;justify-content:center;gap:6px;margin:14px 20px;font-size:13px;color:#555}
+  .sys span{background:#e6eded;border-radius:12px;padding:6px 12px}
+  .receipt{margin:8px 20px;background:#fff;border-radius:18px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center}
+  .receipt .l{font-size:15px}.receipt .l .muted{font-size:13px;display:block;margin-top:2px}
+  .undo{color:#0B6E73;font-weight:600;font-size:15px;padding:10px 4px}
+  .alert{position:absolute;left:40px;right:40px;top:300px;background:rgba(250,251,251,.97);border-radius:28px;box-shadow:0 20px 50px rgba(0,0,0,.25);padding:22px 20px 14px;z-index:6;text-align:center}
+  .alert h4{margin:0 0 6px;font-size:17px}.alert p{margin:0 0 14px;font-size:14px;color:#444;line-height:1.35}
+  .abtn{display:block;border-radius:22px;padding:12px;font-size:17px;margin-top:8px;background:#e9eded}
+  .abtn.p{background:#0B7A80;color:#fff;font-weight:600}
+  .note{width:222px;height:470px;border:1px solid var(--border);border-radius:calc(var(--radius) + 6px);padding:16px;box-sizing:border-box;font:13px/1.45 var(--font-sans);color:var(--foreground);overflow:hidden}
+  .note h5{margin:0 0 8px;font-size:14px}.note ul{margin:0;padding-left:16px}.note li{margin-bottom:7px}
+</style></head><body>
+<div class="grid">
+
+  <!-- A closed -->
+  <div class="cell">
+    <div class="frame"><div class="phone">
+      <div class="sb"><span>9:41</span><span style="letter-spacing:2px">▂▄▆ ▭</span></div>
+      <div class="nav"><span class="title">Coach</span><span><span class="glassbtn">↺</span><span class="glassbtn">◯</span></span></div>
+      <div class="sub">GPT-6.2 Sol <span class="chev">▼</span></div>
+      <div class="day">Today</div>
+      <div class="user">Two eggs and toast</div>
+      <div class="saved">Input saved on this iPhone</div>
+      <div class="reply">Logged Eggs (2) and Toast (1 slice). 260 kcal.</div>
+      <div class="card"><b>Saved food</b><br>Eggs · 2 egg<br>Toast · 1 slice <span class="muted">· 260 kcal</span></div>
+      <div class="pip"></div>
+      <div class="composer"><div class="crow"><div class="field">Message Coach<span class="mic">🎙</span></div><div class="cam">📷</div></div></div>
+      <div class="tabs"><div>🍴<br>Today</div><div>📄<br>Diary</div><div>📊<br>Progress</div><div class="on">💬<br>Coach</div></div>
+    </div></div>
+    <div class="tag">Model under the title<small>Tap “GPT‑6.2 Sol ▾” to change it. Settings changes too.</small></div>
+  </div>
+
+  <!-- A open -->
+  <div class="cell">
+    <div class="frame"><div class="phone">
+      <div class="sb"><span>9:41</span><span style="letter-spacing:2px">▂▄▆ ▭</span></div>
+      <div class="nav"><span class="title">Coach</span><span><span class="glassbtn">↺</span><span class="glassbtn">◯</span></span></div>
+      <div class="sub">GPT-6.2 Sol <span class="chev">▲</span></div>
+      <div class="dim"></div>
+      <div class="menu" style="left:20px;top:140px">
+        <div class="mh">ChatGPT</div>
+        <div class="mi"><span class="ck">✓</span><span>GPT‑6.2 Sol</span></div>
+        <div class="mi"><span class="ck"></span><span>GPT‑6.2 Astra</span></div>
+        <div class="mi"><span class="ck"></span><span>GPT‑6.1 Sol</span></div>
+        <div class="msep"></div>
+        <div class="mh">On this iPhone</div>
+        <div class="mi"><span class="ck"></span><span>Apple</span></div>
+      </div>
+      <div class="day">Today</div>
+      <div class="user">Two eggs and toast</div>
+      <div class="saved">Input saved on this iPhone</div>
+      <div class="reply">Logged Eggs (2) and Toast (1 slice). 260 kcal.</div>
+      <div class="pip"></div>
+      <div class="composer"><div class="crow"><div class="field">Message Coach<span class="mic">🎙</span></div><div class="cam">📷</div></div></div>
+      <div class="tabs"><div>🍴<br>Today</div><div>📄<br>Diary</div><div>📊<br>Progress</div><div class="on">💬<br>Coach</div></div>
+    </div></div>
+    <div class="tag">Menu open<small>Only the models on this person's plan, plus Apple on this iPhone.</small></div>
+  </div>
+
+  <div class="cell">
+    <div class="frame"><div class="phone">
+      <div class="sb"><span>9:41</span><span style="letter-spacing:2px">▂▄▆ ▭</span></div>
+      <div class="nav"><span class="title">Coach</span><span><span class="glassbtn">↺</span><span class="glassbtn">◯</span></span></div>
+      <div class="sub">GPT-6.2 Sol <span class="chev">▼</span></div>
+      <div class="day">Today</div>
+      <div class="sys"><span>Now using GPT‑6.2 Sol (was 6.1) · <b style="color:#0B6E73">Undo</b></span></div>
+      <div class="user">Chicken salad for lunch</div>
+      <div class="saved">Input saved on this iPhone</div>
+      <div class="reply">Logged Chicken salad (1 bowl). 410 kcal.</div>
+      <div class="pip"></div>
+      <div class="composer"><div class="crow"><div class="field">Message Coach<span class="mic">🎙</span></div><div class="cam">📷</div></div></div>
+      <div class="tabs"><div>🍴<br>Today</div><div>📄<br>Diary</div><div>📊<br>Progress</div><div class="on">💬<br>Coach</div></div>
+    </div></div>
+    <div class="tag">Sol 6.2 comes out<small>Sol people move up to 6.2 automatically, with one line and Undo. Astra people stay on Astra.</small></div>
+  </div>
+  <!-- C ask coach -->
+  <div class="cell">
+    <div class="frame"><div class="phone">
+      <div class="sb"><span>9:41</span><span style="letter-spacing:2px">▂▄▆ ▭</span></div>
+      <div class="nav"><span class="title">Coach</span><span><span class="glassbtn">↺</span><span class="glassbtn">◯</span></span></div>
+      <div class="day">Today</div>
+      <div class="user">Use Astra from now on</div>
+      <div class="saved">Input saved on this iPhone</div>
+      <div class="reply">Done — I’ll use GPT‑6.2 Astra for your next messages.</div>
+      <div class="receipt"><div class="l"><b>Model changed</b><span class="muted">GPT‑6.2 Sol → GPT‑6.2 Astra</span></div><span class="undo">Undo</span></div>
+      <div class="user">Big bowl of pasta</div>
+      <div class="pip"></div>
+      <div class="composer"><div class="crow"><div class="field">Message Coach<span class="mic">🎙</span></div><div class="cam">📷</div></div></div>
+      <div class="tabs"><div>🍴<br>Today</div><div>📄<br>Diary</div><div>📊<br>Progress</div><div class="on">💬<br>Coach</div></div>
+    </div></div>
+    <div class="tag">Just ask Coach<small>“Use Astra” switches the model and shows a card with Undo.</small></div>
+  </div>
+
+  <!-- switching mid reply -->
+  <div class="cell">
+    <div class="frame"><div class="phone">
+      <div class="sb"><span>9:41</span><span style="letter-spacing:2px">▂▄▆ ▭</span></div>
+      <div class="nav"><span class="title">Coach</span><span><span class="glassbtn">↺</span><span class="glassbtn">◯</span></span></div>
+      <div class="sub">GPT-6.2 Astra <span class="chev">▼</span></div>
+      <div class="day">Today</div>
+      <div class="user">Two eggs and toast</div>
+      <div class="saved">Input saved on this iPhone</div>
+      <div class="reply muted">Thinking…</div>
+      <div class="sys"><span>Switched to GPT‑6.2 Astra · answering again</span></div>
+      <div class="pip"></div>
+      <div class="composer"><div class="crow"><div class="field">Message Coach<span class="mic">🎙</span></div><div class="cam">📷</div></div></div>
+      <div class="tabs"><div>🍴<br>Today</div><div>📄<br>Diary</div><div>📊<br>Progress</div><div class="on">💬<br>Coach</div></div>
+    </div></div>
+    <div class="tag">Switching while Coach is answering<small>No popup: the meal stays saved and Coach answers again with the new model.</small></div>
+  </div>
+
+  <div class="cell">
+    <div class="frame"><div class="phone">
+      <div class="sb"><span>9:41</span><span style="letter-spacing:2px">▂▄▆ ▭</span></div>
+      <div class="nav"><span class="title">Coach</span><span><span class="glassbtn">↺</span><span class="glassbtn">◯</span></span></div>
+      <div class="sub" style="color:#555">GPT‑6.2 Go</div>
+      <div class="day">Today</div>
+      <div class="user">Two eggs and toast</div>
+      <div class="saved">Input saved on this iPhone</div>
+      <div class="reply">Logged Eggs (2) and Toast (1 slice). 260 kcal.</div>
+      <div class="pip"></div>
+      <div class="composer"><div class="crow"><div class="field">Message Coach<span class="mic">🎙</span></div><div class="cam">📷</div></div></div>
+      <div class="tabs"><div>🍴<br>Today</div><div>📄<br>Diary</div><div>📊<br>Progress</div><div class="on">💬<br>Coach</div></div>
+    </div></div>
+    <div class="tag">Plan with one model (Go)<small>Shows the name only: no ▾ and no menu. Never shows Sol or Astra if the plan lacks them.</small></div>
+  </div>
+
+</div>
+</body></html>

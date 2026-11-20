@@ -705,6 +705,13 @@ enum DiaryLaunch {
         false
         #endif
     }
+    static var isModelMenuFixture: Bool {
+        #if DEBUG
+        isUITest && ProcessInfo.processInfo.arguments.contains("--model-menu-fixture")
+        #else
+        false
+        #endif
+    }
     static var isCoachInferenceFixture: Bool { isCoachUITest && ProcessInfo.processInfo.arguments.contains("--coach-inference-fixture") }
     static var isSampleMode: Bool {
         #if DEBUG

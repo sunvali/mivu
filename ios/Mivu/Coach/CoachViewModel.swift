@@ -32,6 +32,8 @@ private final class CoachNavigationReadFence: Sendable {
     private(set) var companionPhotoEvent: CompanionEvent?
     private(set) var isSending = false
     private(set) var isWorking = false
+    /// A switch asked for in chat; applied once that turn finishes, so the reply keeps the model it started with.
+    @ObservationIgnored private var pendingModel: (choice: String, account: String?)?
     private(set) var activity: CoachActivity?
     private(set) var activityTurnID: UUID?
     var errorMessage: String? {
@@ -202,6 +204,7 @@ private final class CoachNavigationReadFence: Sendable {
     }
     /// Sends a one-tap message; anything the person was composing is set aside and put back afterwards.
     private func sendTap(_ text: String, reply: CoachReply) async {
+        connection.dismissModelNotice()
         synchronizeDraftOwnership()
         guard !isSending, !attachmentDraft.isPreparing else { return }
         let kept = draft, keptReply = attachmentDraft.reply, owner = diary.selection
@@ -333,6 +336,7 @@ private final class CoachNavigationReadFence: Sendable {
 
     func synchronizeDraftOwnership() { attachmentDraft.synchronizeOwnership(diary.selection) }
     @discardableResult func send() async -> Bool {
+        connection.dismissModelNotice()
         guard sending == nil else { return false }
         let task = Task { await performSend() }
         sending = task
@@ -496,6 +500,7 @@ private final class CoachNavigationReadFence: Sendable {
                             }
                         }
                         let photoLimiter = diary.photoWorkLimiter
+                        pendingModel = nil
                         do {
                             _ = try await CoachEngine(store: diary.store, infer: resilient, lookup: lookup, prepareImages: { originals in
                                 try await photoLimiter.withPermit { try PhotoImport.visionCopies(originals) }
@@ -503,7 +508,11 @@ private final class CoachNavigationReadFence: Sendable {
                                 await self.reportActivity(phase, workerID: id, owner: owner, turnID: turn.id)
                             }, onConsulted: { read in
                                 await self.noteConsulted(read, turnID: turn.id)
+                            }, chooseModel: { name in
+                                await self.requestModel(name)
                             }).run(turnID: turn.id, expectedProfileID: owner)
+                            // The reply already says it switched, so apply it before anything can stop this pass; it restarts the worker.
+                            applyRequestedModel()
                         } catch {
                             guard !Task.isCancelled, diary.selection == selected else { break }
                             errorMessage = message(for: error)
@@ -666,6 +675,29 @@ private final class CoachNavigationReadFence: Sendable {
     func cancel() { activity = nil; activityTurnID = nil; worker?.cancel() }
     deinit { monitor.cancel() }
     func waitForWorker() async { await worker?.value }
+
+    /// Matches what the person named against the chosen plan's models; nothing changes until the turn ends.
+    /// Apple versus ChatGPT is a Settings choice, so a chat request never crosses it.
+    func requestModel(_ name: String) -> String {
+        let available = connection.coachModels
+        func json(_ value: [String: Any]) -> String {
+            (try? JSONSerialization.data(withJSONObject: value, options: .sortedKeys)).map { String(decoding: $0, as: UTF8.self) } ?? "{}"
+        }
+        guard !available.isEmpty else { return json(["changed": false, "reason": "Coach AI is switched in Settings"]) }
+        guard let model = ModelFamily.match(name, in: available) else {
+            return json(["changed": false, "available": available.map(\.displayName)])
+        }
+        pendingModel = (model.slug, connection.activeRegistrationID)
+        return json(["changed": true, "model": model.displayName, "applies": "next message"])
+    }
+
+    private func applyRequestedModel() {
+        guard let requested = pendingModel else { return }
+        pendingModel = nil
+        // A switch asked for under one account never lands on another.
+        guard requested.account == connection.activeRegistrationID else { return }
+        connection.choose(requested.choice, announce: true)
+    }
     // shortcut: session only, lost on relaunch; store with the turn if users miss the button.
     private var consultedByTurn: (turnID: UUID, items: [CoachConsulted])?
     /// What the engine read to answer this turn, in this session; empty for any other turn.
