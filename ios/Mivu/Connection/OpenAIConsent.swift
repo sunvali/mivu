@@ -4,6 +4,8 @@ enum MivuLinks {
     static let privacyPolicy = URL(string: "https://mivuapp.com/privacy")!
     static let appStore = URL(string: "https://apps.apple.com/app/id6826633410")!
     static let writeReview = URL(string: "https://apps.apple.com/app/id6826633410?action=write-review")!
+    /// Campaign link (pt = App Store Connect provider, ct = campaign) so App Store Connect counts installs from friends' shares.
+    static let shareApp = URL(string: "https://apps.apple.com/app/apple-store/id6826633410?pt=121681039&ct=share&mt=8")!
     static let chatGPTUsage = URL(string: "https://chatgpt.com/settings/usage")!
     /// OpenAI's own explanation of which plans other apps may use.
     static let chatGPTPlanHelp = URL(string: "https://help.openai.com/en/articles/20001542-using-your-chatgpt-plan-in-other-apps-and-sites")!

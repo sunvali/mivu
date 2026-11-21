@@ -633,6 +633,29 @@
         }
       }
     },
+    "I've been logging my meals with Mivu: just snap a photo and it does the counting. Try it:" : {
+      "comment" : "Message sent to a friend with the App Store link, which follows it",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "התחלתי לתעד את הארוחות שלי ב-Mivu: פשוט מצלמים, והאפליקציה עושה את החישוב. נסו:"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estoy registrando mis comidas con Mivu: tomas una foto y hace las cuentas por ti. Pruébala:"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Я записываю, что ем, в Mivu: просто сфотографируй еду, а приложение само всё посчитает. Попробуй:"
+          }
+        }
+      }
+    },
     "Keep %@" : {
       "comment" : "Toast button: keep the previous time zone; %@ is a city name",
       "localizations" : {
@@ -1418,6 +1441,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Автоматически"
+          }
+        }
+      }
+    },
+    "Share Mivu" : {
+      "comment" : "Settings button that opens the share sheet to send a friend the App Store link",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שיתוף Mivu"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartir Mivu"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поделиться Mivu"
           }
         }
       }
