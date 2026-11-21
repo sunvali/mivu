@@ -1715,6 +1715,29 @@
         }
       }
     },
+    "Swipe right to reply." : {
+      "comment" : "Pip's speech bubble in Coach: teaches swiping a chat message to the right to quote it in a reply",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "החליקו ימינה כדי להגיב."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desliza a la derecha para responder."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Смахните вправо, чтобы ответить."
+          }
+        }
+      }
+    },
     "Swipe to Controls and tap Choose a Control." : {
       "localizations" : {
         "he" : {
