@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.9.0](https://github.com/sunvali/mivu/compare/ios-v1.8.0...ios-v1.9.0) (2026-11-21)
+
+
+### Features
+
+* **coach:** advice chips and food comparisons that never block logging ([#181](https://github.com/sunvali/mivu/issues/181)) ([f88b13d](https://github.com/sunvali/mivu/commit/f88b13d46466bb857edb0ee66a244112fb1e071f))
+* **coach:** Pip teaches swipe to reply ([#187](https://github.com/sunvali/mivu/issues/187)) ([2561784](https://github.com/sunvali/mivu/commit/2561784a9077d39b7e525629a2bf0363bb370def))
+* **coach:** switch the ChatGPT model from Coach ([#184](https://github.com/sunvali/mivu/issues/184)) ([17e210d](https://github.com/sunvali/mivu/commit/17e210dafc4df5e2447e4dd30cf6f6c261e792bc))
+* **diary:** amount ruler, presets and recent foods for manual entry ([#179](https://github.com/sunvali/mivu/issues/179)) ([3902ffe](https://github.com/sunvali/mivu/commit/3902ffebc33198fb851d726a5d2dc456bd61343f))
+* **diary:** name mixed meals with a Coach title ([#183](https://github.com/sunvali/mivu/issues/183)) ([4ee105f](https://github.com/sunvali/mivu/commit/4ee105f51749306f262c43628e11b5d49bc5449d))
+* **diary:** steer manual logging toward Pip ([#186](https://github.com/sunvali/mivu/issues/186)) ([2113ab8](https://github.com/sunvali/mivu/commit/2113ab83b2e31792621092e58dac17875f94376b))
+* **feedback:** send feedback screen ([#173](https://github.com/sunvali/mivu/issues/173)) ([7d94c65](https://github.com/sunvali/mivu/commit/7d94c658e1d81ad6d1db5377ad2e4ef7aea39290))
+* **feedback:** send reports directly to the reports worker ([#175](https://github.com/sunvali/mivu/issues/175)) ([8af07ff](https://github.com/sunvali/mivu/commit/8af07ffe2a61167c1eb516f86f586cd15e899a32))
+* **settings:** share Mivu with friends ([#190](https://github.com/sunvali/mivu/issues/190)) ([5aa5242](https://github.com/sunvali/mivu/commit/5aa5242fc37945384aa73dd913b51e5430052a6d))
+* **update:** update prompts, required-update screen and what's new ([#176](https://github.com/sunvali/mivu/issues/176)) ([30576bb](https://github.com/sunvali/mivu/commit/30576bbae59ac0efc8565a338b88de9a9cc269fd))
+
+
+### Bug Fixes
+
+* **coach:** ask how much instead of which one for a portion question about a known food ([#180](https://github.com/sunvali/mivu/issues/180)) ([8349ac2](https://github.com/sunvali/mivu/commit/8349ac2a746903755b37875e03184167f584ae95))
+* **coach:** keep the suggestions arrow on the same side ([#191](https://github.com/sunvali/mivu/issues/191)) ([cb83cca](https://github.com/sunvali/mivu/commit/cb83ccacadf9684f7464865152ff29f5b61c8a5d))
+* **coach:** Pip's eyes follow right-to-left drafts ([#182](https://github.com/sunvali/mivu/issues/182)) ([c053172](https://github.com/sunvali/mivu/commit/c05317268028a9eed26ef3914bdb042a2168b2fc))
+* **coach:** show unsent photos inside the field so they read as waiting to send ([#189](https://github.com/sunvali/mivu/issues/189)) ([cf7752b](https://github.com/sunvali/mivu/commit/cf7752ba36a77e8b42fad460d42e45ed7014f93d))
+* **coach:** stop showing a stale error after background work fails ([#178](https://github.com/sunvali/mivu/issues/178)) ([6c1596e](https://github.com/sunvali/mivu/commit/6c1596ee0616f797453b045706cbaf23dd6027fd))
+* **diary:** show Coach progress on Today meal rows ([#188](https://github.com/sunvali/mivu/issues/188)) ([9390a2d](https://github.com/sunvali/mivu/commit/9390a2deb0663615cde0359a3089de8621c0dedf))
+* **diary:** wait for a brief write lock instead of reporting invalid data ([#185](https://github.com/sunvali/mivu/issues/185)) ([5d970a0](https://github.com/sunvali/mivu/commit/5d970a05788f75bc14e173a8a5085b58dc847a75))
+* **ios:** keep the camera hint and Coach prompt readable at large text ([#172](https://github.com/sunvali/mivu/issues/172)) ([d0fd0bd](https://github.com/sunvali/mivu/commit/d0fd0bd3f3e32cd11d142688111d16d889fd3d17))
+* **update:** ask the App Store lookup for a fresh answer ([#177](https://github.com/sunvali/mivu/issues/177)) ([36f0ee2](https://github.com/sunvali/mivu/commit/36f0ee248fab95ed6da802ae6dd43ea51b216003))
+
 ## [1.8.0](https://github.com/sunvali/mivu/compare/ios-v1.7.0...ios-v1.8.0) (2026-11-19)
 
 
