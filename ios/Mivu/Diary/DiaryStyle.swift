@@ -236,7 +236,7 @@ extension SubmissionState {
 }
 
 extension CoachTurnState {
-    /// Short row wording that matches the Coach screen's status for the same turn.
+    /// Short row wording for the states the Coach screen explains in full; `completed` never reaches a row.
     var rowTitle: LocalizedStringKey {
         switch self {
         case .captured: "Waiting to start"

@@ -57,7 +57,7 @@ import XCTest
         XCTAssertEqual(XCTWaiter.wait(for: [expectation(for: thinking, evaluatedWith: row)], timeout: 6), .completed, "Today shows the Coach is working: \(row.label)")
         app.swipeUp() // The capture bar covers the first row until the list scrolls.
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "today-thinking"; shot.lifetime = .keepAlways; add(shot)
-        let done = NSPredicate(format: "NOT (label CONTAINS 'Thinking') AND NOT (label CONTAINS 'Waiting')")
+        let done = NSPredicate(format: "label CONTAINS 'kcal'")
         XCTAssertEqual(XCTWaiter.wait(for: [expectation(for: done, evaluatedWith: row)], timeout: 20), .completed, "The row settles when Coach finishes: \(row.label)")
         let after = XCTAttachment(screenshot: app.screenshot()); after.name = "today-done"; after.lifetime = .keepAlways; add(after)
     }
