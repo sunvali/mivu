@@ -20,4 +20,16 @@ final class FeedbackUITests: XCTestCase {
         message.tap(); message.typeText("Synthetic test message")
         XCTAssertTrue(send.isEnabled)
     }
+
+    func testSettingsSharesMivu() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--proof-english"]
+        app.launch()
+        XCTAssertTrue(app.buttons["profileSettings"].waitForExistence(timeout: 15)); app.buttons["profileSettings"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        let row = app.buttons["shareMivu"], list = app.collectionViews.firstMatch
+        for _ in 0..<8 where !row.isHittable { list.swipeUp() }
+        row.tap()
+        XCTAssertTrue(app.otherElements["ActivityListView"].waitForExistence(timeout: 5)) // the system share sheet
+    }
 }

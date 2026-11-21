@@ -19,6 +19,7 @@ struct SettingsView: View {
     @State private var showConnectionDiagnostic = false
     @State private var showGoals = false
     @State private var showPipStickers = false
+    @State private var sharingMivu = false
     @State private var showSnapItShortcuts = false
     @State private var showOnboarding = false
     @State private var fields = DiaryPreferencesDraft()
@@ -81,6 +82,9 @@ struct SettingsView: View {
                         .accessibilityIdentifier("privacyPolicy")
                     Link(destination: MivuLinks.writeReview) { settingsRow(String(localized: "Rate Mivu"), symbol: "star", color: .diaryCarbs) }
                         .accessibilityIdentifier("rateMivu")
+                    Button { sharingMivu = true } label: { settingsRow(String(localized: "Share Mivu"), symbol: "square.and.arrow.up", color: .diarySuccess) }
+                        .accessibilityIdentifier("shareMivu")
+                        .sheet(isPresented: $sharingMivu) { ActivitySheet(items: [MivuInvite()]).presentationDetents([.medium, .large]).ignoresSafeArea() }
                     Text("Calorie and nutrition figures are estimates, not medical advice. Check with a doctor or registered dietitian before big changes to how you eat.").font(.subheadline).foregroundStyle(Color.diarySecondary)
                     Text("Keep a backup or export before changing phones.").font(.subheadline).foregroundStyle(Color.diarySecondary)
                 } header: { Text("Support") }
