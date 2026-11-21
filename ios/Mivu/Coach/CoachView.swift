@@ -754,6 +754,7 @@ struct CoachView: View {
     }
     private var quickPromptRow: some View {
         HStack(spacing: 4) {
+            suggestionsToggle
             ScrollView(.horizontal) {
                 HStack(spacing: 8) {
                     ForEach(Array(quickPrompts.enumerated()), id: \.element.id) { index, prompt in
@@ -781,7 +782,6 @@ struct CoachView: View {
                 }
             }
             .accessibilityElement(children: .contain).accessibilityIdentifier("coachQuickPrompts")
-            suggestionsToggle
         }
         .padding(.bottom, -4).transition(.opacity)
     }
