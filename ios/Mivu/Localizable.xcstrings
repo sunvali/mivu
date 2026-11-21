@@ -1609,25 +1609,25 @@
         }
       }
     },
-    "Swipe right on a message to reply." : {
-      "comment" : "Pip's speech bubble in Coach: teaches the swipe gesture that quotes an earlier chat message",
+    "Swipe right to reply." : {
+      "comment" : "Pip's speech bubble in Coach: teaches swiping a chat message to the right to quote it in a reply",
       "localizations" : {
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "החליקו ימינה על הודעה כדי להגיב."
+            "value" : "החליקו ימינה כדי להגיב."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Desliza un mensaje a la derecha para responder."
+            "value" : "Desliza a la derecha para responder."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Смахните сообщение вправо, чтобы ответить."
+            "value" : "Смахните вправо, чтобы ответить."
           }
         }
       }

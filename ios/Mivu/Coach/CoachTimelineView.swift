@@ -341,9 +341,10 @@ final class CoachTimelineCell: UITableViewCell {
     /// The arrow appears beside the finger, so it sits next to the message being swiped in a tall exchange.
     var replyIconY: CGFloat?
     private lazy var replyIcon: UIImageView = {
-        let icon = UIImageView(image: UIImage(systemName: "arrowshape.turn.up.left.fill",
-            withConfiguration: UIImage.SymbolConfiguration(textStyle: .subheadline, scale: .medium)))
-        icon.tintColor = .secondaryLabel; icon.contentMode = .center; icon.alpha = 0
+        // A filled accent disc, as bold as the arrow in Messages, so the swipe Pip teaches answers clearly.
+        let icon = UIImageView(image: UIImage(systemName: "arrowshape.turn.up.left.circle.fill",
+            withConfiguration: UIImage.SymbolConfiguration(textStyle: .title1, scale: .medium)))
+        icon.tintColor = UIColor(Color.diaryAccent); icon.contentMode = .center; icon.alpha = 0
         icon.backgroundColor = .tertiarySystemFill; icon.layer.cornerRadius = 16; icon.isAccessibilityElement = false
         insertSubview(icon, belowSubview: contentView)
         return icon

@@ -95,7 +95,7 @@ import XCTest
 
     func testPipTeachesSwipeReplyUntilTheFirstReply() {
         let app = launchHistory(extra: ["--coach-reply-tip"])
-        let tip = app.staticTexts["Swipe right on a message to reply."]
+        let tip = app.staticTexts["Swipe right to reply."]
         XCTAssertTrue(tip.waitForExistence(timeout: 5), "Pip names the gesture once there are messages to reply to")
         let proof = XCTAttachment(screenshot: app.screenshot()); proof.name = "Pip reply tip"; proof.lifetime = .keepAlways; add(proof)
         let row = viewport(app).coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.3))

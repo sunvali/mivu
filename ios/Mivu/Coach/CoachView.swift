@@ -49,6 +49,7 @@ struct CoachView: View {
     /// Coach visits left on which Pip still mentions swipe-to-reply; zero once the user has replied.
     @AppStorage("coachReplyTipLeft", store: DiaryLaunch.defaults) private var replyTipLeft = 3
     @State private var replyTip: Bool?
+    @State private var replyTipSeen = false
     @State private var clockHour = Calendar.current.component(.hour, from: .now)
     @State private var windowHeight: CGFloat = 0
     @State private var promptsOverflow = false
@@ -209,7 +210,12 @@ struct CoachView: View {
         .onChange(of: canTeachReply && pipLine(tip: true) == PipLine.replyTip, initial: true) { _, free in
             guard free, replyTip == nil, replyTipLeft > 0,
                   !DiaryLaunch.isUITest || CommandLine.arguments.contains("--coach-reply-tip") else { return }
-            replyTip = true; replyTipLeft -= 1
+            replyTip = true
+        }
+        // A visit counts once the tip has been on screen long enough to read, not when Coach was only passed through.
+        .task(id: pipLine == PipLine.replyTip) {
+            guard pipLine == PipLine.replyTip, !replyTipSeen, (try? await Task.sleep(for: .seconds(1.5))) != nil else { return }
+            replyTipSeen = true; replyTipLeft -= 1
         }
         .onChange(of: coach.isSending) { _, sending in if sending, replyTip == true { replyTip = false } }
         .task(id: coach.diary.selection) { await coach.connectTimeline() }

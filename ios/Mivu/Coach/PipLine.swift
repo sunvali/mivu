@@ -7,7 +7,7 @@ enum PipLine: Equatable {
     case problem(String, detail: String?, canRetry: Bool)
     case connect
 
-    static var replyTip: PipLine { .say(String(localized: "Swipe right on a message to reply.")) }
+    static var replyTip: PipLine { .say(String(localized: "Swipe right to reply.")) }
 
     static func current(hour: Int, mealsLogged: Bool, typing: Bool, connected: Bool, processing: Bool,
                         withPhotos: Bool, recovery: Bool, error: String?, turnState: CoachTurnState?, chips: Bool = false, tip: Bool = false) -> PipLine? {

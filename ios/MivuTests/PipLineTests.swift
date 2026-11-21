@@ -21,8 +21,8 @@ struct PipLineTests {
     }
 
     @Test func replyTipTakesOnlyTheIdleLine() {
-        #expect(line(tip: true) == .say("Swipe right on a message to reply."))
-        #expect(line(mealsLogged: true, chips: true, tip: true) == .say("Swipe right on a message to reply."))
+        #expect(line(tip: true) == .say("Swipe right to reply."))
+        #expect(line(mealsLogged: true, chips: true, tip: true) == .say("Swipe right to reply."))
         #expect(line(typing: true, tip: true) == nil)
         #expect(line(processing: true, tip: true) == .working("Counting that up…"))
         #expect(line(connected: false, tip: true) == .connect)
