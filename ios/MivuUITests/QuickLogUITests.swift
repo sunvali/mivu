@@ -41,6 +41,27 @@ import XCTest
         XCTAssertTrue(app.buttons["mealRow"].firstMatch.waitForExistence(timeout: 10))
     }
 
+    func testSnappedMealShowsThinkingOnTodayUntilCoachFinishes() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-inference-fixture", "--coach-ui-test-slow", "--coach-navigation-start-today", "--proof-english"]
+        app.launch()
+        let snapIt = app.buttons["snapIt"]
+        XCTAssertTrue(snapIt.waitForExistence(timeout: 15))
+        snapIt.tap()
+        let photo = app.buttons["quickLogSyntheticPhoto"]
+        XCTAssertTrue(photo.waitForExistence(timeout: 10))
+        photo.tap()
+        let row = app.buttons["mealRow"].firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        let thinking = NSPredicate(format: "label CONTAINS 'Thinking'")
+        XCTAssertEqual(XCTWaiter.wait(for: [expectation(for: thinking, evaluatedWith: row)], timeout: 6), .completed, "Today shows the Coach is working: \(row.label)")
+        app.swipeUp() // The capture bar covers the first row until the list scrolls.
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "today-thinking"; shot.lifetime = .keepAlways; add(shot)
+        let done = NSPredicate(format: "label CONTAINS 'kcal'")
+        XCTAssertEqual(XCTWaiter.wait(for: [expectation(for: done, evaluatedWith: row)], timeout: 20), .completed, "The row settles when Coach finishes: \(row.label)")
+        let after = XCTAttachment(screenshot: app.screenshot()); after.name = "today-done"; after.lifetime = .keepAlways; add(after)
+    }
+
     func testLargestTextStacksPipThenManualLinkUnderSnapIt() {
         let app = XCUIApplication()
         app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--coach-ui-test", "--coach-navigation-start-today",

@@ -51,6 +51,20 @@ private actor CaptureOptionReplies {
         #expect(snapshot.coachTurns.first { $0.id == original.id }?.text == original.text)
         #expect(done.assistantText == "Trying that meal again.")
     }
+    @Test func capturedMealCarriesItsUnfinishedCoachState() async throws {
+        let path = URL.temporaryDirectory.appending(path: "CoachMealState-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: path) }
+        let store = DiaryStore(directory: path), profile = DiaryProfile(name: "Synthetic")
+        _ = try await store.createProfile(profile)
+        let day = try await store.startDay()
+        let meal = try await capturedMeal(store, text: "Synthetic snapped soup", photos: [], reviewFirst: false, dayID: day.id, forCoach: true, expectedProfileID: profile.id)
+        #expect(try await store.meal(id: meal.id, expectedProfileID: profile.id).coachState == .captured)
+        let turn = try #require(await store.snapshotForExport().coachTurns.first)
+        try await store.setCoachTurnState(turnID: turn.id, state: .analyzing, expectedProfileID: profile.id)
+        #expect(try await store.meal(id: meal.id, expectedProfileID: profile.id).coachState == .analyzing)
+        try await store.setCoachTurnState(turnID: turn.id, state: .completed, expectedProfileID: profile.id)
+        #expect(try await store.meal(id: meal.id, expectedProfileID: profile.id).coachState == nil)
+    }
     @Test func manualPreferenceSaveRejectsAConcurrentCoachChange() async throws {
         let path = URL.temporaryDirectory.appending(path: "CoachPreferenceRace-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: path) }

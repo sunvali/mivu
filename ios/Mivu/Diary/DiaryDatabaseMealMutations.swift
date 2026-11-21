@@ -217,8 +217,11 @@ extension DiaryTransaction {
         let statement = try database.domainStatement("SELECT r.turnID FROM record_source r JOIN coach_index c ON c.turnID = r.turnID WHERE r.kind = 'meal' AND r.recordID = ? AND r.relation = 'origin' ORDER BY c.sequence LIMIT 1", [.text(id.uuidString)])
         defer { sqlite3_finalize(statement) }
         let source = try database.mutationStep(statement) ? database.mutationOptionalUUID(statement, 0) : nil
+        let pending = try database.domainStatement("SELECT state FROM coach_index WHERE pendingMealID = ? AND state != 'completed' ORDER BY sequence DESC LIMIT 1", [.text(id.uuidString)])
+        defer { sqlite3_finalize(pending) }
+        let coachState = try database.mutationStep(pending) ? CoachTurnState(rawValue: try database.mutationText(pending, 0)) : nil
         return MealReadModel(id: id, dayID: meal.dayID, capturedAt: meal.capturedAt, eatenAt: meal.eatenAt, revision: meal.revision,
-            timePrecision: meal.timePrecision, timeZoneID: meal.timeZoneID, items: items, submissions: submissions, photos: photos, sourceTurnID: source, title: meal.title)
+            timePrecision: meal.timePrecision, timeZoneID: meal.timeZoneID, items: items, submissions: submissions, photos: photos, sourceTurnID: source, title: meal.title, coachState: coachState)
     }
     func dayProjection(_ day: TrackingDay) throws -> DiaryDayReadModel {
         let meals = try records("meal", clause: "parent = ?", values: [.text(day.id.uuidString)]).map { row -> MealReadModel in

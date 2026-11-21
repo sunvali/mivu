@@ -934,6 +934,36 @@
         }
       }
     },
+    "Needs more detail" : {
+      "comment" : "Meal status: Coach asked a question before it can log the meal",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Needs more detail"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "צריך עוד פרטים"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Faltan detalles"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нужны подробности"
+          }
+        }
+      }
+    },
     "Now on %@ time" : {
       "comment" : "Toast: the diary followed the phone to a new time zone; %@ is a city name",
       "localizations" : {
@@ -953,6 +983,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Теперь время: %@"
+          }
+        }
+      }
+    },
+    "Offline" : {
+      "comment" : "Meal status: Coach is waiting for the network",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Offline"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לא מקוון"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin conexión"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет сети"
           }
         }
       }

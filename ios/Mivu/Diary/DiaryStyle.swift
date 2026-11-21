@@ -235,6 +235,28 @@ extension SubmissionState {
     }
 }
 
+extension CoachTurnState {
+    /// Short row wording for the states the Coach screen explains in full; `completed` never reaches a row.
+    var rowTitle: LocalizedStringKey {
+        switch self {
+        case .captured: "Waiting to start"
+        case .analyzing: "Thinking…"
+        case .waitingForConnection: "Waiting for connection"
+        case .waitingForNetwork: "Offline"
+        case .needsRetry: "Needs retry"
+        case .needsClarification: "Needs more detail"
+        case .completed: "Completed"
+        }
+    }
+    var rowColor: Color {
+        switch self {
+        case .analyzing: .diaryAccent
+        case .needsRetry: .diaryError
+        default: .diaryWarning
+        }
+    }
+}
+
 extension DayStatus {
     var title: LocalizedStringKey {
         switch self {
@@ -297,16 +319,37 @@ struct MealRow: View {
     @ScaledMetric(relativeTo: .body) private var thumbnail = 56.0
     private var title: String { meal.displayTitle }
     private var needsReview: Bool { meal.state == .awaitingReview }
+    /// A saved meal keeps its numbers; only live work replaces its status, so a stale failed turn can't mislabel it.
+    private var coachState: CoachTurnState? {
+        guard let state = meal.coachState, !meal.isSaved || state == .captured || state == .analyzing else { return nil }
+        return state
+    }
     private var statusText: Text {
         let time = meal.timePrecision == .dateOnly ? Text("Time unspecified") : MealClock.text(MealClock.label(meal))
         let estimated = meal.items.first?.provenance == .estimate ? Text(" · Estimated") : Text("")
+        if let coach = coachState { return Text("\(Text(coach.rowTitle)) · \(time)") }
         return meal.state == .saved ? Text("\(time)\(estimated)") : Text("\(Text(meal.state.title)) · \(time)")
     }
     /// Combined rows read child labels, so a tagged time is spelled out in full ("7:40 PM, Jerusalem time").
     private var spokenStatus: Text? {
         guard meal.timePrecision != .dateOnly, case let clock = MealClock.label(meal), clock.tag != nil else { return nil }
         let estimated = meal.items.first?.provenance == .estimate ? Text(" · Estimated") : Text("")
+        if let coach = coachState { return Text("\(Text(coach.rowTitle)) · \(Text(clock.spoken))") }
         return meal.state == .saved ? Text("\(Text(clock.spoken))\(estimated)") : Text("\(Text(meal.state.title)) · \(Text(clock.spoken))")
+    }
+    /// "Thinking… · 7:40 PM" on one line when it fits; large text puts the time on its own line instead of wrapping at the dot.
+    private func coachStatus(_ coach: CoachTurnState) -> some View {
+        let time = meal.timePrecision == .dateOnly ? Text("Time unspecified") : MealClock.text(MealClock.label(meal))
+        let title = HStack(spacing: 6) {
+            if coach == .analyzing { ProgressView().controlSize(.mini) }
+            Text(coach.rowTitle)
+        }
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 4) { title; Text("· \(time)") }.fixedSize()
+            VStack(alignment: .leading, spacing: 2) { title; time }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(spokenStatus ?? statusText)
     }
     @ViewBuilder private var calories: some View {
         if meal.isSaved {
@@ -324,8 +367,11 @@ struct MealRow: View {
                     .accessibilityLabel(meal.spokenTitle)
                 if needsReview { Circle().fill(Color.diaryWarning).frame(width: 8, height: 8).accessibilityHidden(true) }
             }
-            Group { if let spokenStatus { statusText.accessibilityLabel(spokenStatus) } else { statusText } }
-                .font(.subheadline).foregroundStyle(meal.state == .saved ? Color.diarySecondary : meal.state.color)
+            Group {
+                if let coach = coachState { coachStatus(coach) }
+                else if let spokenStatus { statusText.accessibilityLabel(spokenStatus) } else { statusText }
+            }
+            .font(.subheadline).foregroundStyle(coachState?.rowColor ?? (meal.state == .saved ? Color.diarySecondary : meal.state.color))
         }
     }
     var body: some View {

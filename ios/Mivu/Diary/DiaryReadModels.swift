@@ -54,6 +54,8 @@ struct MealReadModel: Equatable, Sendable, Identifiable {
     var photos: [DiaryPhotoReference]
     var sourceTurnID: UUID?
     var title: MealTitle? = nil
+    /// The linked Coach turn while it is still unfinished, so Today can say "Thinking…" instead of "Captured".
+    var coachState: CoachTurnState? = nil
     var displayTitle: String { mealTitle(items: items, title: title, note: submissions.first?.text ?? "") }
     var spokenTitle: String { mealTitle(items: items, title: title, note: submissions.first?.text ?? "", spoken: true) }
     var totals: NutritionTotals { nutritionTotals(items) }
