@@ -235,6 +235,28 @@ extension SubmissionState {
     }
 }
 
+extension CoachTurnState {
+    /// Short row wording that matches the Coach screen's status for the same turn.
+    var rowTitle: LocalizedStringKey {
+        switch self {
+        case .captured: "Waiting to start"
+        case .analyzing: "Thinking…"
+        case .waitingForConnection: "Waiting for connection"
+        case .waitingForNetwork: "Offline"
+        case .needsRetry: "Needs retry"
+        case .needsClarification: "Needs more detail"
+        case .completed: "Completed"
+        }
+    }
+    var rowColor: Color {
+        switch self {
+        case .analyzing: .diaryAccent
+        case .needsRetry: .diaryError
+        default: .diaryWarning
+        }
+    }
+}
+
 extension DayStatus {
     var title: LocalizedStringKey {
         switch self {
@@ -297,15 +319,22 @@ struct MealRow: View {
     @ScaledMetric(relativeTo: .body) private var thumbnail = 56.0
     private var title: String { meal.displayTitle }
     private var needsReview: Bool { meal.state == .awaitingReview }
+    /// A saved meal keeps its numbers; only live work replaces its status, so a stale failed turn can't mislabel it.
+    private var coachState: CoachTurnState? {
+        guard let state = meal.coachState, !meal.isSaved || state == .captured || state == .analyzing else { return nil }
+        return state
+    }
     private var statusText: Text {
         let time = meal.timePrecision == .dateOnly ? Text("Time unspecified") : MealClock.text(MealClock.label(meal))
         let estimated = meal.items.first?.provenance == .estimate ? Text(" · Estimated") : Text("")
+        if let coach = coachState { return Text("\(Text(coach.rowTitle)) · \(time)") }
         return meal.state == .saved ? Text("\(time)\(estimated)") : Text("\(Text(meal.state.title)) · \(time)")
     }
     /// Combined rows read child labels, so a tagged time is spelled out in full ("7:40 PM, Jerusalem time").
     private var spokenStatus: Text? {
         guard meal.timePrecision != .dateOnly, case let clock = MealClock.label(meal), clock.tag != nil else { return nil }
         let estimated = meal.items.first?.provenance == .estimate ? Text(" · Estimated") : Text("")
+        if let coach = coachState { return Text("\(Text(coach.rowTitle)) · \(Text(clock.spoken))") }
         return meal.state == .saved ? Text("\(Text(clock.spoken))\(estimated)") : Text("\(Text(meal.state.title)) · \(Text(clock.spoken))")
     }
     @ViewBuilder private var calories: some View {
@@ -324,8 +353,11 @@ struct MealRow: View {
                     .accessibilityLabel(meal.spokenTitle)
                 if needsReview { Circle().fill(Color.diaryWarning).frame(width: 8, height: 8).accessibilityHidden(true) }
             }
-            Group { if let spokenStatus { statusText.accessibilityLabel(spokenStatus) } else { statusText } }
-                .font(.subheadline).foregroundStyle(meal.state == .saved ? Color.diarySecondary : meal.state.color)
+            HStack(spacing: 6) {
+                if coachState == .analyzing { ProgressView().controlSize(.mini).accessibilityHidden(true) }
+                Group { if let spokenStatus { statusText.accessibilityLabel(spokenStatus) } else { statusText } }
+            }
+            .font(.subheadline).foregroundStyle(coachState?.rowColor ?? (meal.state == .saved ? Color.diarySecondary : meal.state.color))
         }
     }
     var body: some View {

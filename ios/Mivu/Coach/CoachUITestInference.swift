@@ -9,7 +9,7 @@ enum CoachUITestInference {
         if input.last(where: { if case .message(role: .user, _, _) = $0 { return true }; return false }).map({
             if case .message(_, let text, _) = $0 { return text == "Synthetic delayed weekly report" }
             return false
-        }) == true {
+        }) == true || ProcessInfo.processInfo.arguments.contains("--coach-ui-test-slow") {
             try await Task.sleep(for: .seconds(8))
         }
         // History exchanges precede the context message; only the current capture follows it. A later
