@@ -337,6 +337,20 @@ struct MealRow: View {
         if let coach = coachState { return Text("\(Text(coach.rowTitle)) · \(Text(clock.spoken))") }
         return meal.state == .saved ? Text("\(Text(clock.spoken))\(estimated)") : Text("\(Text(meal.state.title)) · \(Text(clock.spoken))")
     }
+    /// "Thinking… · 7:40 PM" on one line when it fits; large text puts the time on its own line instead of wrapping at the dot.
+    private func coachStatus(_ coach: CoachTurnState) -> some View {
+        let time = meal.timePrecision == .dateOnly ? Text("Time unspecified") : MealClock.text(MealClock.label(meal))
+        let title = HStack(spacing: 6) {
+            if coach == .analyzing { ProgressView().controlSize(.mini) }
+            Text(coach.rowTitle)
+        }
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 4) { title; Text("· \(time)") }.fixedSize()
+            VStack(alignment: .leading, spacing: 2) { title; time }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(spokenStatus ?? statusText)
+    }
     @ViewBuilder private var calories: some View {
         if meal.isSaved {
             HStack(alignment: .firstTextBaseline, spacing: 3) {
@@ -353,9 +367,9 @@ struct MealRow: View {
                     .accessibilityLabel(meal.spokenTitle)
                 if needsReview { Circle().fill(Color.diaryWarning).frame(width: 8, height: 8).accessibilityHidden(true) }
             }
-            HStack(spacing: 6) {
-                if coachState == .analyzing { ProgressView().controlSize(.mini).accessibilityHidden(true) }
-                Group { if let spokenStatus { statusText.accessibilityLabel(spokenStatus) } else { statusText } }
+            Group {
+                if let coach = coachState { coachStatus(coach) }
+                else if let spokenStatus { statusText.accessibilityLabel(spokenStatus) } else { statusText }
             }
             .font(.subheadline).foregroundStyle(coachState?.rowColor ?? (meal.state == .saved ? Color.diarySecondary : meal.state.color))
         }
