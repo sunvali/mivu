@@ -586,8 +586,6 @@ struct CoachView: View {
                     withAnimation(.snappy) { dismissedMorningDay = day.id.uuidString }
                 }.transition(.opacity)
             }
-            if !coach.attachmentDraft.attachments.isEmpty { AnyView(draftPhotos) }
-            if coach.attachmentDraft.isPreparing { ProgressView("Preparing photos").font(.caption) }
             // Pip stands on the left of the field's flat top edge, never on the round button; his bubble and chip
             // may run over the button's column so short lines do not wrap.
             VStack(alignment: .leading, spacing: 0) {
@@ -652,6 +650,7 @@ struct CoachView: View {
         // A reply quote sits inside the field's top, as in Messages; the camera sits at its trailing edge.
         VStack(alignment: .leading, spacing: 0) {
             if let reply = coach.attachmentDraft.reply { replyBar(reply) }
+            if !coach.attachmentDraft.attachments.isEmpty || coach.attachmentDraft.isPreparing { AnyView(draftPhotos) }
             HStack(alignment: .bottom, spacing: 0) {
                 // Stacked, not overlaid, so the field grows to fit the words plus the wave while listening.
                 ZStack(alignment: .topLeading) {
@@ -842,7 +841,8 @@ struct CoachView: View {
         }
     }
     private var placeholder: some View {
-        Text("Describe a meal…").foregroundStyle(Color(uiColor: .placeholderText))
+        // With photos attached the prompt says what is left to do, so they read as waiting to be sent.
+        Text(coach.attachmentDraft.attachments.isEmpty ? "Describe a meal…" : "Add a note or send").foregroundStyle(Color(uiColor: .placeholderText))
             .lineLimit(typeSize.isAccessibilitySize ? 3 : 4)
             .padding(.leading, 16).padding(.vertical, 10)
             // A wrapped prompt reaches below the one-line field, so taps there start typing too.
@@ -929,25 +929,46 @@ struct CoachView: View {
         .disabled(!coach.canSend)
         .accessibilityLabel("Send").accessibilityIdentifier("coachSend")
     }
+    /// Unsent photos sit inside the field with a remove badge, as in Messages, so they read as part of the draft.
     private var draftPhotos: some View {
         ScrollView(.horizontal) {
-            HStack(spacing: 12) {
+            HStack(spacing: 0) {
                 ForEach(Array(coach.attachmentDraft.attachments.enumerated()), id: \.element.id) { index, photo in
-                    VStack(spacing: 0) {
-                        if let image = UIImage(data: photo.data) {
-                            Image(uiImage: image).resizable().scaledToFill().frame(width: 88, height: 88).clipped()
-                                .clipShape(RoundedRectangle(cornerRadius: 12)).accessibilityLabel("Attached photo \(index + 1)")
+                    let remove = { _ = Task { try? await coach.attachmentDraft.remove(photo.id) } }
+                    ZStack(alignment: .topTrailing) {
+                        Button { openCamera(replacing: photo.id) } label: {
+                            if let image = UIImage(data: photo.data) {
+                                // The fill and hairline keep a pale or cut-out photo reading as a tile.
+                                Image(uiImage: image).resizable().scaledToFill().frame(width: 60, height: 60)
+                                    .background(Color.diaryRule.opacity(0.3)).clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .overlay { RoundedRectangle(cornerRadius: 12).strokeBorder(Color.diaryRule, lineWidth: 0.5) }
+                            }
                         }
-                        HStack {
-                            Button("Retake") { openCamera(replacing: photo.id) }.frame(minWidth: 44, minHeight: 44)
-                                .accessibilityLabel("Retake photo \(index + 1)")
-                            Button("Remove", role: .destructive) { Task { try? await coach.attachmentDraft.remove(photo.id) } }
-                                .frame(minWidth: 44, minHeight: 44).accessibilityLabel("Remove photo \(index + 1)")
-                        }.font(.caption)
+                        .padding(.top, 8).padding(.trailing, 8)
+                        .contextMenu {
+                            Button("Retake", systemImage: "camera") { openCamera(replacing: photo.id) }
+                            Button("Remove", systemImage: "trash", role: .destructive, action: remove)
+                        }
+                        .accessibilityLabel("Retake photo \(index + 1)").accessibilitySortPriority(1)
+                        // The badge looks small; its target is the full 44 points. A fixed size keeps it on the tile's corner at large text.
+                        Button(action: remove) {
+                            Image(systemName: "xmark.circle.fill").font(.system(size: 22)).symbolRenderingMode(.palette)
+                                .foregroundStyle(.white, .black.opacity(0.6))
+                                .frame(width: 44, height: 44, alignment: .topTrailing).contentShape(.rect)
+                        }
+                        .accessibilityLabel("Remove photo \(index + 1)")
                     }
+                    .buttonStyle(.plain)
+                }
+                if coach.attachmentDraft.isPreparing {
+                    ProgressView().frame(width: 60, height: 60)
+                        .background(Color.diaryRule.opacity(0.3), in: RoundedRectangle(cornerRadius: 12))
+                        .padding(.top, 8).accessibilityLabel("Preparing photos")
                 }
             }
+            .padding(.leading, 12).padding(.top, 4)
         }
+        .scrollIndicators(.hidden).padding(.bottom, -6)
     }
     @ViewBuilder private func messageActions(_ turn: CoachExchangeSummary, fromPip: Bool) -> some View {
         Button("Reply", systemImage: "arrowshape.turn.up.left") { reply(to: turn, fromPip: fromPip) }
