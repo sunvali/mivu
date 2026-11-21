@@ -5295,6 +5295,29 @@
         }
       }
     },
+    "Add a note or send" : {
+      "comment" : "Coach field prompt once photos are attached and waiting to be sent",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "להוסיף הערה או לשלוח"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añade una nota o envía"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавь заметку или отправь"
+          }
+        }
+      }
+    },
     "Add a note, a photo, or both." : {
       "localizations" : {
         "he" : {
@@ -6899,29 +6922,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Прикреплённое фото еды %lld"
-          }
-        }
-      }
-    },
-    "Attached photo %lld" : {
-      "comment" : "VoiceOver label for the %lld-th attached photo",
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "תמונה מצורפת %lld"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Foto adjunta %lld"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Прикреплённое фото %lld"
           }
         }
       }

@@ -334,7 +334,13 @@ import XCTest
         XCTAssertTrue(app.buttons["coachSend"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.textFields["coachInput"].value as? String, "Synthetic camera draft")
         XCTAssertFalse(app.staticTexts["Synthetic camera draft"].exists)
-        XCTAssertTrue(app.buttons["Remove photo 1"].exists)
+        // The unsent photo sits inside the field, right above the words, never up in the conversation.
+        let photo = app.buttons["Retake photo 1"], remove = app.buttons["Remove photo 1"], input = app.textFields["coachInput"]
+        XCTAssertTrue(photo.exists)
+        XCTAssertLessThan(abs(input.frame.minY - photo.frame.maxY), 16)
+        XCTAssertGreaterThanOrEqual(remove.frame.height, 44); XCTAssertGreaterThanOrEqual(remove.frame.width, 44)
+        remove.tap()
+        XCTAssertTrue(photo.waitForNonExistence(timeout: 5))
     }
     func testYesterdayLunchCorrectionShowsCommittedTotalAndTargetDate() throws {
         let app = launchHistory()
