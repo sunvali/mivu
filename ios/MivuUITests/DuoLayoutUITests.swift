@@ -21,7 +21,14 @@ import XCTest
         XCTAssertTrue(meals.exists)
         XCTAssertLessThanOrEqual(summary.frame.maxX, meals.frame.minX + 1)
         XCTAssertTrue(app.buttons["logWeight"].exists, "Weight stays in the summary column")
-        XCTAssertLessThanOrEqual(app.buttons["logMeal"].frame.width, 300, "Capture buttons keep a normal size sideways")
+        for id in ["snapIt", "logMeal", "addManually"] {
+            let action = app.buttons[id]
+            XCTAssertTrue(action.isHittable, "\(id) is reachable without scrolling")
+            XCTAssertGreaterThanOrEqual(action.frame.minX, meals.frame.minX - 1)
+            XCTAssertLessThanOrEqual(action.frame.maxX, meals.frame.maxX + 1)
+        }
+        XCTAssertGreaterThan(summary.frame.maxY, app.buttons["logMeal"].frame.maxY,
+                             "The summary scrolls alongside the capture actions")
     }
 
     func testUprightTodayStaysOneColumn() throws {
