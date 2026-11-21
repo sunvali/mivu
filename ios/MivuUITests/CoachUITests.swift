@@ -538,12 +538,13 @@ import XCTest
         XCTAssertTrue(app.staticTexts["Connect ChatGPT in Settings to continue"].waitForExistence(timeout: 10), "The photo-only turn is saved")
     }
 
-    private func quickPromptsApp(hour: Int = 8, id: String = UUID().uuidString, seed: Bool = false) -> XCUIApplication {
+    private func quickPromptsApp(hour: Int = 8, id: String = UUID().uuidString, seed: Bool = false, hebrew: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["--diary-ui-test", id, "--coach-ui-test", "--coach-inference-fixture", "--proof-english", "--quick-prompts-hour", String(hour)]
+        app.launchArguments = ["--diary-ui-test", id, "--coach-ui-test", "--coach-inference-fixture", "--quick-prompts-hour", String(hour)]
+        app.launchArguments += hebrew ? ["-AppleLanguages", "(he)", "-AppleLocale", "he_IL"] : ["--proof-english"]
         if seed { app.launchArguments.append("--quick-prompts-fixture") }
         app.launch()
-        XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.navigationBars[hebrew ? "פיפ" : "Coach"].waitForExistence(timeout: 15))
         return app
     }
     private func chips(in app: XCUIApplication) -> XCUIElementQuery {
@@ -605,21 +606,38 @@ import XCTest
     }
 
     func testCollapseArrowHidesAndRestoresTheRow() {
+        checkCollapseArrow(hebrew: false)
+    }
+
+    func testCollapseArrowHidesAndRestoresTheRowInHebrew() {
+        checkCollapseArrow(hebrew: true)
+    }
+
+    private func checkCollapseArrow(hebrew: Bool) {
         let id = UUID().uuidString
-        var app = quickPromptsApp(id: id)
+        var app = quickPromptsApp(id: id, hebrew: hebrew)
         let collapse = app.buttons["coachQuickPromptsCollapse"]
         XCTAssertTrue(collapse.waitForExistence(timeout: 5)); XCTAssertGreaterThanOrEqual(collapse.frame.height, 44)
+        let expandedArrowX = collapse.frame.midX
+        if hebrew {
+            XCTAssertEqual(collapse.label, "הסתרת הצעות")
+            XCTAssertGreaterThan(expandedArrowX, app.windows.firstMatch.frame.midX, "The Hebrew composer mirrors the control")
+        }
         let field = app.descendants(matching: .any)["coachInput"]
         collapse.tap()
         XCTAssertTrue(app.buttons["coachQuickPromptsExpand"].waitForExistence(timeout: 3))
         XCTAssertEqual(chips(in: app).count, 0)
         // The tray shrinks to the field: the arrow moves beside it instead of keeping the row's band.
         XCTAssertEqual(app.buttons["coachQuickPromptsExpand"].frame.midY, field.frame.midY, accuracy: 12)
-        app.terminate(); app = quickPromptsApp(id: id)
+        XCTAssertEqual(app.buttons["coachQuickPromptsExpand"].frame.midX, expandedArrowX, accuracy: 2,
+                       "The arrow stays on the same side when the row collapses")
+        app.terminate(); app = quickPromptsApp(id: id, hebrew: hebrew)
         let expand = app.buttons["coachQuickPromptsExpand"]
         XCTAssertTrue(expand.waitForExistence(timeout: 5), "Collapsed stays collapsed after relaunch")
+        if hebrew { XCTAssertEqual(expand.label, "הצגת הצעות") }
         expand.tap()
         XCTAssertTrue(app.buttons["coachQuickPrompt-log.slot"].waitForExistence(timeout: 3))
+        XCTAssertEqual(app.buttons["coachQuickPromptsCollapse"].frame.midX, expandedArrowX, accuracy: 2)
     }
 
     func testSuggestionsSwitchTurnsTheRowOff() {
