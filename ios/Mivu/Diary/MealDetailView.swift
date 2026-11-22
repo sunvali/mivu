@@ -326,7 +326,7 @@ struct MealDetailView: View {
                     Text("Nutrition").font(.headline)
                     Text("— kcal").font(.largeTitle.weight(.semibold)).monospacedDigit()
                     Text("Not estimated yet").font(.subheadline).foregroundStyle(Color.diarySecondary)
-                    Text(meal.state == .cancelled ? "Analysis was cancelled. Your note and photos are kept." : meal.state == .needsRetry ? "Your meal is saved. Retry analysis when you’re ready." : meal.state == .waitingForConnection ? (connection?.planNotEligible == true ? "Your ChatGPT plan can’t be used in other apps. Add nutrition by hand." : "Connect ChatGPT to analyze this saved meal.") : "Your meal is saved. Analysis will resume when available.")
+                    Text(meal.state == .cancelled ? "Analysis was cancelled. Your note and photos are kept." : meal.state == .needsRetry ? "Your meal is saved. Retry analysis when you’re ready." : meal.state == .waitingForConnection ? (connection?.planNotEligible == true ? "Your ChatGPT plan can’t be used in other apps. Add nutrition by hand." : connection?.accountState == .planPermissionMissing ? "Your meal is saved. Analysis will resume when available." : "Connect ChatGPT to analyze this saved meal.") : "Your meal is saved. Analysis will resume when available.")
                         .font(.subheadline).foregroundStyle(Color.diarySecondary)
                 }
             }

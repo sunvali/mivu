@@ -297,9 +297,8 @@ struct SettingsView: View {
                 }
                 if connection.provider == .chatGPT || connection.activeRegistrationID != nil {
                 Section("Connection") {
-                    if connection.planNotEligible || connection.accountState == .planPermissionMissing {
-                        Label("ChatGPT plan unavailable", systemImage: "person.crop.circle")
-                    }
+                    if connection.planNotEligible { Label("ChatGPT plan unavailable", systemImage: "person.crop.circle") }
+                    else if connection.accountState == .planPermissionMissing { Label("Signed in without plan permission", systemImage: "person.crop.circle") }
                     else { Label(connection.planAuthorized ? "ChatGPT connected" : "Connect for meal analysis", systemImage: "person.crop.circle") }
                     if connection.planNotEligible {
                         Text("You’re signed in, but your ChatGPT plan can’t be used in other apps. You can keep logging meals by hand.").font(.subheadline).foregroundStyle(Color.diarySecondary)

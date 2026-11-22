@@ -1205,6 +1205,7 @@ struct CoachView: View {
         case .captured: String(localized: "Waiting to start")
         case .analyzing: String(localized: "Thinking…")
         case .waitingForConnection: coach.connection.planNotEligible ? String(localized: "Your ChatGPT plan can’t be used in other apps.")
+            : coach.connection.accountState == .planPermissionMissing ? String(localized: "Enable ChatGPT plan usage")
             : String(localized: "Connect ChatGPT in Settings to continue")
         case .waitingForNetwork: String(localized: "Offline. I'll reply when you're back online.")
         case .needsRetry: String(localized: "Couldn't finish. Your message is saved.")
