@@ -21,7 +21,25 @@ import XCTest
         XCTAssertTrue(meals.exists)
         XCTAssertLessThanOrEqual(summary.frame.maxX, meals.frame.minX + 1)
         XCTAssertTrue(app.buttons["logWeight"].exists, "Weight stays in the summary column")
-        XCTAssertLessThanOrEqual(app.buttons["logMeal"].frame.width, 300, "Capture buttons keep a normal size sideways")
+        for id in ["snapIt", "logMeal", "addManually"] {
+            let action = app.buttons[id]
+            XCTAssertTrue(action.isHittable, "\(id) is reachable without scrolling")
+            XCTAssertGreaterThanOrEqual(action.frame.minX, meals.frame.minX - 1)
+            XCTAssertLessThanOrEqual(action.frame.maxX, meals.frame.maxX + 1)
+        }
+        assertCaptureActionsShareARow(app)
+    }
+
+    /// Stacked, the three actions took about a quarter of an iPhone and most of the closed Duo.
+    func testUprightCaptureActionsShareARow() {
+        assertCaptureActionsShareARow(launch(wide: false))
+    }
+
+    private func assertCaptureActionsShareARow(_ app: XCUIApplication, line: UInt = #line) {
+        let snap = app.buttons["snapIt"].frame, chat = app.buttons["logMeal"].frame
+        XCTAssertTrue(chat.minY < snap.midY && snap.midY < chat.maxY, "Snap It and Chat with Pip sit side by side", line: line)
+        XCTAssertLessThanOrEqual(snap.maxX, chat.minX + 1, line: line)
+        XCTAssertGreaterThanOrEqual(app.buttons["addManually"].frame.minY, chat.maxY - 1, "Add manually stays a link underneath", line: line)
     }
 
     func testUprightTodayStaysOneColumn() throws {

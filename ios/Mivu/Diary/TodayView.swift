@@ -839,19 +839,64 @@ struct TodayView: View {
         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
     }
+    @ViewBuilder private var captureActions: some View {
+        if model.readModel != nil, !isLiveDay {
+            VStack(spacing: 8) {
+                // Inline, not a popover: a popover still closing left Today deaf to taps once the steps sheet was dismissed.
+                // No arrow: Snap It shares its row, so a centred arrow would point between two buttons.
+                TipView(snapItTip, arrowEdge: nil) { _ in snapItTip.invalidate(reason: .actionPerformed); showSnapItShortcuts = true }
+                    .tipBackground(Color.diarySurface).tipViewStyle(SnapItTipStyle())
+                // Side by side keeps the bar short; stacked only when the labels no longer fit.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) { primaryCaptureActions }
+                    VStack(spacing: 8) { primaryCaptureActions }
+                }
+                if !model.sampleMode {
+                    // Logging is text and photos first; typed numbers stay a quiet link.
+                    Button { showManualNutrition = true } label: {
+                        Text("Add manually").font(.subheadline.weight(.medium)).foregroundStyle(Color.diaryAccent)
+                            .frame(minWidth: 44, minHeight: 44).contentShape(.rect)
+                    }
+                        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                        .accessibilityHint("Opens a form to type in nutrition.")
+                        .accessibilityIdentifier("addManually")
+                }
+            }
+            .padding(.horizontal, 20).padding(.vertical, 12)
+            .frame(maxWidth: .infinity)
+            .background(Color.diaryCanvas)
+        }
+    }
+    @ViewBuilder private var primaryCaptureActions: some View {
+        // Reuses the Shortcuts camera; disabled when it couldn't open now, so a tap never fires later.
+        DiaryCaptureAction { QuickLogRequest.shared.pending = true }
+            .disabled(model.selection == nil || model.isChangingProfile)
+        if model.sampleMode { DiaryManualAction(title: "Log meal", systemImage: "plus.circle.fill", identifier: "logMeal") { showComposer = true } }
+        else { // shortcut: sample mode keeps MealComposerView because Coach has no sample analyzer, delete when sample mode goes or Coach gains one
+            DiaryManualAction(title: "Chat with Pip", systemImage: "bubble.left.fill", identifier: "logMeal") {
+                if let selection = model.selection { openChat(nil, expectedSelection: selection) }
+            }
+            .disabled(model.selection == nil || model.isChangingProfile)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility2) // the bar must leave room for the day
+            .accessibilityHint("Opens a chat where you can add photos and notes.")
+        }
+    }
     var body: some View {
         Group {
             if isWide {
                 DuoSplit {
                     todayList { leadingSections; trailingSections }.accessibilityIdentifier("todaySummaryColumn")
                 } secondary: {
-                    todayList { mealSections }.accessibilityIdentifier("todayMealsColumn")
+                    todayList { mealSections }
+                        .accessibilityIdentifier("todayMealsColumn")
+                        .safeAreaInset(edge: .bottom) { captureActions }
                 }
             } else if isLiveDay {
                 // Meals first, so the meal Coach just changed shows above the keyboard.
                 todayList { mealSections; leadingSections; trailingSections }
             } else {
                 todayList { leadingSections; mealSections; trailingSections }
+                    .safeAreaInset(edge: .bottom) { captureActions }
             }
         }
         .task(id: isLiveDay ? currentRevisions : nil) {
@@ -862,40 +907,6 @@ struct TodayView: View {
             changedMealID = changed
             guard changed != nil, (try? await Task.sleep(for: .seconds(3))) != nil else { return }
             changedMealID = nil
-        }
-        .safeAreaInset(edge: .bottom) {
-            if model.readModel != nil, !isLiveDay {
-                VStack(spacing: 8) {
-                    // Inline, not a popover: a popover still closing left Today deaf to taps once the steps sheet was dismissed.
-                    TipView(snapItTip, arrowEdge: .bottom) { _ in snapItTip.invalidate(reason: .actionPerformed); showSnapItShortcuts = true }
-                        .tipBackground(Color.diarySurface).tipViewStyle(SnapItTipStyle())
-                    // Reuses the Shortcuts camera; disabled when it couldn't open now, so a tap never fires later.
-                    DiaryCaptureAction { QuickLogRequest.shared.pending = true }
-                        .disabled(model.selection == nil || model.isChangingProfile)
-                    if model.sampleMode { DiaryManualAction(title: "Log meal", systemImage: "plus.circle.fill", identifier: "logMeal") { showComposer = true } }
-                    else { // shortcut: sample mode keeps MealComposerView because Coach has no sample analyzer, delete when sample mode goes or Coach gains one
-                        DiaryManualAction(title: "Chat with Pip", systemImage: "bubble.left.fill", identifier: "logMeal") {
-                            if let selection = model.selection { openChat(nil, expectedSelection: selection) }
-                        }
-                        .disabled(model.selection == nil || model.isChangingProfile)
-                        .dynamicTypeSize(...DynamicTypeSize.accessibility2) // the bar must leave room for the day
-                        .accessibilityHint("Opens a chat where you can add photos and notes.")
-                        // Logging is text and photos first; typed numbers stay a quiet link.
-                        Button { showManualNutrition = true } label: {
-                            Text("Add manually").font(.subheadline.weight(.medium)).foregroundStyle(Color.diaryAccent)
-                                .frame(minWidth: 44, minHeight: 44).contentShape(.rect)
-                        }
-                            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
-                            .accessibilityHint("Opens a form to type in nutrition.")
-                            .accessibilityIdentifier("addManually")
-                    }
-                }
-                // Sideways the bar would span the whole display; keep the buttons phone-sized.
-                .frame(maxWidth: isWide ? 560 : .infinity)
-                .padding(.horizontal, 20).padding(.vertical, 12)
-                .frame(maxWidth: .infinity)
-                .background(Color.diaryCanvas)
-            }
         }
         .navigationDestination(for: UUID.self) {
             MealDetailView(model: model, mealID: $0)
