@@ -475,7 +475,8 @@ struct CoachView: View {
                 Text("Your ChatGPT plan can’t be used in other apps.")
                 Link("Learn more", destination: MivuLinks.chatGPTPlanHelp).modifier(BubbleAction())
             case .connect:
-                Text("Connect ChatGPT so I can count for you")
+                if coach.connection.accountState != .planPermissionMissing { Text("Connect ChatGPT so I can count for you") }
+                ChatGPTPlanHint(connection: coach.connection)
                 ChatGPTConnectButton(connection: coach.connection, title: String(localized: "Connect")).modifier(BubbleAction())
             }
         }

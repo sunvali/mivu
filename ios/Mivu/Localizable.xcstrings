@@ -13654,30 +13654,6 @@
         }
       }
     },
-    "Enable ChatGPT plan usage before sending a request." : {
-      "comment" : "Shown from a stored value; the value itself stays English.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "צריך להפעיל שימוש בתוכנית ChatGPT לפני שליחת בקשה."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Activa el uso del plan de ChatGPT antes de enviar una solicitud."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Включи использование тарифа ChatGPT перед отправкой запроса."
-          }
-        }
-      }
-    },
     "End" : {
       "comment" : "Button: marks the end of a measured scroll range (test/diagnostic)",
       "localizations" : {
@@ -25029,6 +25005,29 @@
         }
       }
     },
+    "Requires ChatGPT Go or higher." : {
+      "comment" : "Minimum ChatGPT subscription to use ChatGPT features in Mivu, shown beside sign-in.",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "צריך תוכנית ChatGPT Go ומעלה."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Requiere ChatGPT Go o un plan superior."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нужен тариф ChatGPT Go или выше."
+          }
+        }
+      }
+    },
     "Restore %@?" : {
       "comment" : "Confirmation title to restore a diary backup; %@ is its name",
       "localizations" : {
@@ -33226,6 +33225,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "На сегодня всё готово"
+          }
+        }
+      }
+    },
+    "You’re signed in. Allow Mivu to use your ChatGPT plan for analysis." : {
+      "comment" : "Shown when ChatGPT sign-in succeeds but the account has not authorized plan use.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "נכנסת לחשבון. כדי לנתח דרך ChatGPT, צריך לאפשר ל-Mivu להשתמש בתוכנית שלך."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Has iniciado sesión. Permite que Mivu use tu plan de ChatGPT para hacer análisis."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вход выполнен. Разреши Mivu использовать твой тариф ChatGPT для анализа."
           }
         }
       }

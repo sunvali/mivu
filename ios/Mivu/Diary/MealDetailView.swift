@@ -339,6 +339,7 @@ struct MealDetailView: View {
                 if connection.planNotEligible {
                     Link("Learn more", destination: MivuLinks.chatGPTPlanHelp).frame(minHeight: 44).buttonStyle(.glass)
                 } else {
+                    ChatGPTPlanHint(connection: connection)
                     ChatGPTConnectButton(connection: connection, title: String(localized: "Connect ChatGPT"))
                         .frame(minHeight: 44).buttonStyle(.glass)
                 }
