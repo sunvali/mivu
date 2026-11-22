@@ -845,17 +845,12 @@ struct TodayView: View {
                 // Inline, not a popover: a popover still closing left Today deaf to taps once the steps sheet was dismissed.
                 TipView(snapItTip, arrowEdge: .bottom) { _ in snapItTip.invalidate(reason: .actionPerformed); showSnapItShortcuts = true }
                     .tipBackground(Color.diarySurface).tipViewStyle(SnapItTipStyle())
-                // Reuses the Shortcuts camera; disabled when it couldn't open now, so a tap never fires later.
-                DiaryCaptureAction { QuickLogRequest.shared.pending = true }
-                    .disabled(model.selection == nil || model.isChangingProfile)
-                if model.sampleMode { DiaryManualAction(title: "Log meal", systemImage: "plus.circle.fill", identifier: "logMeal") { showComposer = true } }
-                else { // shortcut: sample mode keeps MealComposerView because Coach has no sample analyzer, delete when sample mode goes or Coach gains one
-                    DiaryManualAction(title: "Chat with Pip", systemImage: "bubble.left.fill", identifier: "logMeal") {
-                        if let selection = model.selection { openChat(nil, expectedSelection: selection) }
-                    }
-                    .disabled(model.selection == nil || model.isChangingProfile)
-                    .dynamicTypeSize(...DynamicTypeSize.accessibility2) // the bar must leave room for the day
-                    .accessibilityHint("Opens a chat where you can add photos and notes.")
+                // Side by side keeps the bar short; stacked only when the labels no longer fit.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) { primaryCaptureActions }
+                    VStack(spacing: 8) { primaryCaptureActions }
+                }
+                if !model.sampleMode {
                     // Logging is text and photos first; typed numbers stay a quiet link.
                     Button { showManualNutrition = true } label: {
                         Text("Add manually").font(.subheadline.weight(.medium)).foregroundStyle(Color.diaryAccent)
@@ -869,6 +864,20 @@ struct TodayView: View {
             .padding(.horizontal, 20).padding(.vertical, 12)
             .frame(maxWidth: .infinity)
             .background(Color.diaryCanvas)
+        }
+    }
+    @ViewBuilder private var primaryCaptureActions: some View {
+        // Reuses the Shortcuts camera; disabled when it couldn't open now, so a tap never fires later.
+        DiaryCaptureAction { QuickLogRequest.shared.pending = true }
+            .disabled(model.selection == nil || model.isChangingProfile)
+        if model.sampleMode { DiaryManualAction(title: "Log meal", systemImage: "plus.circle.fill", identifier: "logMeal") { showComposer = true } }
+        else { // shortcut: sample mode keeps MealComposerView because Coach has no sample analyzer, delete when sample mode goes or Coach gains one
+            DiaryManualAction(title: "Chat with Pip", systemImage: "bubble.left.fill", identifier: "logMeal") {
+                if let selection = model.selection { openChat(nil, expectedSelection: selection) }
+            }
+            .disabled(model.selection == nil || model.isChangingProfile)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility2) // the bar must leave room for the day
+            .accessibilityHint("Opens a chat where you can add photos and notes.")
         }
     }
     var body: some View {

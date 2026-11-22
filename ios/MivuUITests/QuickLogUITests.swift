@@ -32,7 +32,7 @@ import XCTest
         XCTAssertTrue(snapIt.isHittable, "Snap It is on screen as soon as Today opens")
         XCTAssertGreaterThanOrEqual(snapIt.frame.height, 44)
         XCTAssertTrue(snapIt.label.contains("Instant photo log"), "The caption separates Snap It from chatting with Pip")
-        XCTAssertLessThan(snapIt.frame.maxY, app.buttons["logMeal"].frame.minY, "Snap It leads the capture bar")
+        XCTAssertLessThanOrEqual(snapIt.frame.maxX, app.buttons["logMeal"].frame.minX + 1, "Snap It leads the capture bar")
         snapIt.tap()
         let photo = app.buttons["quickLogSyntheticPhoto"]
         XCTAssertTrue(photo.waitForExistence(timeout: 10))

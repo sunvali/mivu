@@ -29,6 +29,19 @@ import XCTest
         }
         XCTAssertGreaterThan(summary.frame.maxY, app.buttons["logMeal"].frame.maxY,
                              "The summary scrolls alongside the capture actions")
+        assertCaptureActionsShareARow(app)
+    }
+
+    /// Stacked, the three actions took about a quarter of an iPhone and most of the closed Duo.
+    func testUprightCaptureActionsShareARow() {
+        assertCaptureActionsShareARow(launch(wide: false))
+    }
+
+    private func assertCaptureActionsShareARow(_ app: XCUIApplication, line: UInt = #line) {
+        let snap = app.buttons["snapIt"].frame, chat = app.buttons["logMeal"].frame
+        XCTAssertEqual(snap.midY, chat.midY, accuracy: 1, "Snap It and Chat with Pip sit side by side", line: line)
+        XCTAssertLessThanOrEqual(snap.maxX, chat.minX + 1, line: line)
+        XCTAssertGreaterThanOrEqual(app.buttons["addManually"].frame.minY, chat.maxY - 1, "Add manually stays a link underneath", line: line)
     }
 
     func testUprightTodayStaysOneColumn() throws {
