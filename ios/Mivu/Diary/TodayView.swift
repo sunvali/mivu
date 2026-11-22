@@ -843,7 +843,8 @@ struct TodayView: View {
         if model.readModel != nil, !isLiveDay {
             VStack(spacing: 8) {
                 // Inline, not a popover: a popover still closing left Today deaf to taps once the steps sheet was dismissed.
-                TipView(snapItTip, arrowEdge: .bottom) { _ in snapItTip.invalidate(reason: .actionPerformed); showSnapItShortcuts = true }
+                // No arrow: Snap It shares its row, so a centred arrow would point between two buttons.
+                TipView(snapItTip, arrowEdge: nil) { _ in snapItTip.invalidate(reason: .actionPerformed); showSnapItShortcuts = true }
                     .tipBackground(Color.diarySurface).tipViewStyle(SnapItTipStyle())
                 // Side by side keeps the bar short; stacked only when the labels no longer fit.
                 ViewThatFits(in: .horizontal) {
