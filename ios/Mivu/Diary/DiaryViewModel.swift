@@ -698,13 +698,15 @@ enum DiaryLaunch {
     static var isCoachHistoryFixture: Bool { isCoachUITest && ProcessInfo.processInfo.arguments.contains("--coach-history-fixture") }
     #endif
     static var isCoachUITest: Bool { isUITest && ProcessInfo.processInfo.arguments.contains("--coach-ui-test") }
-    static var isPlanNotEligibleFixture: Bool {
         #if DEBUG
-        isUITest && ProcessInfo.processInfo.arguments.contains("--plan-not-eligible-fixture")
-        #else
-        false
-        #endif
+    static var planAccessFixture: ProofState? {
+        guard isUITest else { return nil }
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("--plan-not-eligible-fixture") { return .planNotEligible }
+        if args.contains("--plan-permission-missing-fixture") { return .planPermissionMissing }
+        return nil
     }
+    #endif
     static var isModelMenuFixture: Bool {
         #if DEBUG
         isUITest && ProcessInfo.processInfo.arguments.contains("--model-menu-fixture")

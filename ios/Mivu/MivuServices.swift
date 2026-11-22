@@ -33,7 +33,7 @@ import UIKit
         let diary = DiaryViewModel.local(), session = ChatGPTConnection(preferences: DiaryLaunch.defaults, appleModelAvailable: appleModelAvailable,
                                                                         appleModelSupported: appleModelSupported)
         #if DEBUG
-        if DiaryLaunch.isPlanNotEligibleFixture { session.applyNotEligibleFixture() }
+        if let state = DiaryLaunch.planAccessFixture { session.applyPlanAccessFixture(state) }
         if DiaryLaunch.isModelMenuFixture { session.applyModelMenuFixture() }
         #endif
         let keys = NutritionAPIKeyStore.local

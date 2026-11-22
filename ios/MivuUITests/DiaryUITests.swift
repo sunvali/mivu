@@ -216,12 +216,23 @@ import XCTest
         // No name to invent: the first diary is created and Pip's setup opens. Answer, keep the estimate, save it.
         let save = answerSetup(in: app)
         XCTAssertTrue(app.buttons["onboardingTune"].exists, "ChatGPT tuning is offered after the estimate, not before it")
+        XCTAssertTrue(app.staticTexts["Requires ChatGPT Go or higher."].isHittable)
         save.tap()
         XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.tabBars.buttons["Today"].isSelected)
         XCTAssertEqual(app.buttons.matching(identifier: "mealRow").count, 0)
         app.buttons["profileSettings"].tap()
         XCTAssertTrue(app.buttons["localProfiles"].label.contains("My diary"))
+    }
+    func testSetupExplainsPlanPermissionAfterSignIn() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--diary-ui-test", UUID().uuidString, "--onboarding-ui-test", "--plan-permission-missing-fixture", "--proof-english"]
+        app.launch()
+        let save = answerSetup(in: app)
+        XCTAssertTrue(app.staticTexts["You’re signed in. Allow Mivu to use your ChatGPT plan for analysis."].isHittable)
+        XCTAssertEqual(app.buttons["onboardingTune"].label, "Enable ChatGPT plan usage")
+        save.tap()
+        XCTAssertTrue(app.buttons["logMeal"].waitForExistence(timeout: 10), "Setup still saves the local estimate")
     }
     func testSetupHidesTuneForAPlanThatCannotConnect() {
         let app = XCUIApplication()

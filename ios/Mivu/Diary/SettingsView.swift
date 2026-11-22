@@ -298,6 +298,7 @@ struct SettingsView: View {
                 if connection.provider == .chatGPT || connection.activeRegistrationID != nil {
                 Section("Connection") {
                     if connection.planNotEligible { Label("ChatGPT plan unavailable", systemImage: "person.crop.circle") }
+                    else if connection.accountState == .planPermissionMissing { Label("Signed in without plan permission", systemImage: "person.crop.circle") }
                     else { Label(connection.planAuthorized ? "ChatGPT connected" : "Connect for meal analysis", systemImage: "person.crop.circle") }
                     if connection.planNotEligible {
                         Text("You’re signed in, but your ChatGPT plan can’t be used in other apps. You can keep logging meals by hand.").font(.subheadline).foregroundStyle(Color.diarySecondary)
@@ -311,6 +312,7 @@ struct SettingsView: View {
                     } else {
                         Text("Coach analysis uses your selected ChatGPT account's plan allowance when eligible and is subject to its usage limits. Captures save locally without a connection.").font(.subheadline).foregroundStyle(Color.diarySecondary)
                     }
+                    ChatGPTPlanHint(connection: connection)
                     if connection.isConnecting {
                         ProgressView("Connecting")
                         Button("Cancel connection") { connection.cancelConnection() }.frame(minHeight: 44)
@@ -325,7 +327,9 @@ struct SettingsView: View {
                     if connection.activeRegistrationID != nil {
                         Button("Disconnect ChatGPT", role: .destructive) { Task { await connection.disconnect() } }.frame(minHeight: 44)
                     }
-                    if let notice = connection.notice { Text(LocalizedStringKey(notice.rawValue)).font(.subheadline).foregroundStyle(Color.diarySecondary) }
+                    if let notice = connection.notice, notice != .permission {
+                        Text(LocalizedStringKey(notice.rawValue)).font(.subheadline).foregroundStyle(Color.diarySecondary)
+                    }
                     if !connection.planNotEligible { Link("Manage usage", destination: MivuLinks.chatGPTUsage).frame(minHeight: 44) }
                     #if DEBUG
                     Button("ChatGPT connection diagnostic") { showConnectionDiagnostic = true }.frame(minHeight: 44)

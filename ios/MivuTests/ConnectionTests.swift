@@ -854,6 +854,20 @@ extension ConnectionTests {
         #expect(harness.eligibilityRequests == 0)
     }
 
+    @Test func signInWithoutPlanPermissionExplainsWhyAnalysisIsUnavailable() async throws {
+        let harness = try EligibilitySignIn(); defer { harness.cleanup() }
+        harness.set(scope: "openid offline_access")
+        await harness.signIn()
+        #expect(harness.connection.activeRegistrationID != nil)
+        #expect(harness.connection.accountState == .planPermissionMissing)
+        #expect(harness.connection.notice == .permission)
+        #expect(harness.eligibilityRequests == 0)
+
+        let relaunched = harness.relaunched()
+        await relaunched.restore()
+        #expect(relaunched.notice == .permission)
+    }
+
     @Test func disconnectClearsNotEligibleFlags() async throws {
         let harness = try EligibilitySignIn(); defer { harness.cleanup() }
         harness.set(eligibility: { notEligibleReply() })

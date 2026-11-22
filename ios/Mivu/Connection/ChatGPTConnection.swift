@@ -21,7 +21,7 @@ enum ConnectionNotice: String {
     case storageFailed = "Local sample storage unavailable"
     case retry = "Analysis paused. Retry when ready."
     case quota = "ChatGPT usage limit reached. Open Manage usage in Settings, then retry when usage is available."
-    case permission = "Enable ChatGPT plan usage before sending a request."
+    case permission = "You’re signed in. Allow Mivu to use your ChatGPT plan for analysis."
     case revoked = "Reconnect to authorize plan usage."
     case disconnected = "Local credentials removed"
     case unconfirmed = "Local credentials removed. Remote revocation unconfirmed."
@@ -47,7 +47,11 @@ final class ChatGPTConnection {
     private(set) var modelNotice: ModelNotice?
     var selectedModelName: String? { models.first { $0.slug == selectedModel }?.displayName }
     private(set) var job: ProbeJob?
-    private(set) var notice: ConnectionNotice?
+    private var requestNotice: ConnectionNotice?
+    private(set) var notice: ConnectionNotice? {
+        get { requestNotice ?? (accountState == .planPermissionMissing ? .permission : nil) }
+        set { requestNotice = newValue }
+    }
     private(set) var failureDiagnostic: ResponseFailureDiagnostic?
     private(set) var isConnecting = false
     private(set) var isLoadingModels = false
@@ -623,7 +627,7 @@ final class ChatGPTConnection {
             notice = nil
         } else if error as? ResponsesClient.Failure == .forbidden {
             pausePermission(snapshot)
-            notice = .permission
+            notice = snapshot == nil ? .revoked : .permission
         } else if error as? ResponsesClient.Failure == .unauthorized {
             pausePermission(snapshot)
             notice = .revoked
@@ -636,7 +640,9 @@ final class ChatGPTConnection {
     #if DEBUG
     /// UI tests only: a fixture account has no saved session, so lifecycle re-applies keep it.
     @ObservationIgnored private var isAccountFixture = false
-    func applyNotEligibleFixture() { isAccountFixture = true; activeRegistrationID = "fixture-registration"; accountState = .planNotEligible }
+    func applyPlanAccessFixture(_ state: ProofState) {
+        isAccountFixture = true; activeRegistrationID = "fixture-registration"; accountState = state
+    }
     /// UI tests only: a connected account offering two synthetic models.
     func applyModelMenuFixture() {
         isAccountFixture = true; activeRegistrationID = "fixture-registration"; accountState = .connected

@@ -181,17 +181,22 @@ struct OnboardingView: View {
 
     private var tuneButton: some View {
         VStack(spacing: 8) {
+            ChatGPTPlanHint(connection: connection).multilineTextAlignment(.center)
             Button { tune() } label: {
                 Group {
-                    if connection.isConnecting { ProgressView() } else { Label("Tune with ChatGPT", systemImage: "sparkles") }
+                    if connection.isConnecting { ProgressView() }
+                    else if connection.accountState == .planPermissionMissing { Label("Enable ChatGPT plan usage", systemImage: "sparkles") }
+                    else { Label("Tune with ChatGPT", systemImage: "sparkles") }
                 }
                 .font(.headline).frame(maxWidth: .infinity, minHeight: 48)
             }
             .buttonStyle(.glass).tint(.diaryAccent)
             .disabled(connection.isConnecting || connection.isDisconnecting || asking || saving)
             .accessibilityIdentifier("onboardingTune")
-            Text("Shares your answers with ChatGPT after you agree.")
-                .font(.caption).foregroundStyle(Color.diarySecondary).multilineTextAlignment(.center)
+            if connection.accountState != .planPermissionMissing {
+                Text("Shares your answers with ChatGPT after you agree.")
+                    .font(.caption).foregroundStyle(Color.diarySecondary).multilineTextAlignment(.center)
+            }
         }
     }
 
@@ -468,7 +473,10 @@ struct OnboardingView: View {
                         .buttonStyle(.glass).tint(.diaryAccent).frame(minHeight: 44)
                 }
             }
-            if let notice = connection.notice { footnote(String(localized: String.LocalizationValue(notice.rawValue))) }
+            if connection.planNotEligible { footnote(String(localized: "Your ChatGPT plan can’t be used in other apps.")) }
+            if let notice = connection.notice, notice != .permission {
+                footnote(String(localized: String.LocalizationValue(notice.rawValue)))
+            }
             if showsTune, typeSize.isAccessibilitySize { tuneButton }
             footnote(String(localized: "These are estimates, not medical advice. Check with a doctor or registered dietitian before big changes to how you eat, especially if you have a health condition. You can change targets any time in Settings › Goals."))
         }
