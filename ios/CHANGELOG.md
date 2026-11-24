@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.9.1](https://github.com/sunvali/mivu/compare/ios-v1.9.0...ios-v1.9.1) (2026-11-24)
+
+
+### Bug Fixes
+
+* **connection:** explain ChatGPT plan access after sign-in ([#193](https://github.com/sunvali/mivu/issues/193)) ([413b2ad](https://github.com/sunvali/mivu/commit/413b2ad9876ca1c0da530c470ed1c3dc52b28096))
+* **ios:** keep Today capture actions compact and in the Duo meals pane ([#192](https://github.com/sunvali/mivu/issues/192)) ([f756f3b](https://github.com/sunvali/mivu/commit/f756f3b4018a54f2b934e1561a98eb3ae19ab9b6))
+* **today:** slimmer capture bar that shows the day scrolls on ([#195](https://github.com/sunvali/mivu/issues/195)) ([21b1d42](https://github.com/sunvali/mivu/commit/21b1d4204306140a07b16fd896bf970db8cec253))
+
 ## [1.9.0](https://github.com/sunvali/mivu/compare/ios-v1.8.0...ios-v1.9.0) (2026-11-21)
 
 
