@@ -65,7 +65,7 @@ struct DiaryCaptureAction: View {
                 Text("Instant photo log").font(.caption).opacity(0.85).dynamicTypeSize(...DynamicTypeSize.accessibility1)
             }
             .dynamicTypeSize(...DynamicTypeSize.accessibility2)
-            .frame(maxWidth: .infinity, minHeight: 52)
+            .frame(maxWidth: .infinity, minHeight: 36) // glass adds ~13pt, so the button is ~50pt: 44pt+ to tap, short enough to show the day
         }
         .tint(.diaryAccent).foregroundStyle(Color.diaryActionText)
         .accessibilityHint("Logs one photo, no chat.")
@@ -91,7 +91,7 @@ struct DiaryManualAction: View {
         Button(action: action) {
             Label { Text(title) } icon: { Image(systemName: systemImage).foregroundStyle(Color.diaryAccent) }
                 .font(.headline)
-                .frame(maxWidth: .infinity, minHeight: 52)
+                .frame(maxWidth: .infinity, minHeight: 36)
         }
         .tint(.diaryAccent)
         .accessibilityIdentifier(identifier)
