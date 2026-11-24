@@ -838,6 +838,8 @@ struct TodayView: View {
         .environment(\.defaultMinListRowHeight, 56)
         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
         .scrollContentBackground(.hidden).background(Color.diaryCanvas)
+        .scrollEdgeEffectStyle(.soft, for: .bottom)
+        .scrollIndicatorsFlash(onAppear: true) // the action bar can hide the rest of the day; show it scrolls
     }
     @ViewBuilder private var captureActions: some View {
         if model.readModel != nil, !isLiveDay {
@@ -862,9 +864,15 @@ struct TodayView: View {
                         .accessibilityIdentifier("addManually")
                 }
             }
-            .padding(.horizontal, 20).padding(.vertical, 12)
+            .padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 8)
             .frame(maxWidth: .infinity)
-            .background(Color.diaryCanvas)
+            // A bar, not an inset: the day fades in above the buttons so it reads as scrollable, while text never shows through them.
+            .background {
+                VStack(spacing: 0) {
+                    LinearGradient(colors: [Color.diaryCanvas.opacity(0), Color.diaryCanvas], startPoint: .top, endPoint: .bottom).frame(height: 24)
+                    Color.diaryCanvas
+                }
+            }
         }
     }
     @ViewBuilder private var primaryCaptureActions: some View {
@@ -889,14 +897,14 @@ struct TodayView: View {
                 } secondary: {
                     todayList { mealSections }
                         .accessibilityIdentifier("todayMealsColumn")
-                        .safeAreaInset(edge: .bottom) { captureActions }
+                        .safeAreaBar(edge: .bottom) { captureActions }
                 }
             } else if isLiveDay {
                 // Meals first, so the meal Coach just changed shows above the keyboard.
                 todayList { mealSections; leadingSections; trailingSections }
             } else {
                 todayList { leadingSections; mealSections; trailingSections }
-                    .safeAreaInset(edge: .bottom) { captureActions }
+                    .safeAreaBar(edge: .bottom) { captureActions }
             }
         }
         .task(id: isLiveDay ? currentRevisions : nil) {
