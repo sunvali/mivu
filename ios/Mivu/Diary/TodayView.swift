@@ -208,7 +208,7 @@ struct DiaryRootView: View {
             // The first Siri use may have been on a locked phone, where no permission prompt can show.
             if hadSiriPrompts { await MealNotification.requestPermissionIfNeeded() }
         }
-        .task(id: "\(model.activeDay?.id.uuidString ?? "")\(model.changeGeneration)") { await model.loadMorningRecap() }
+        .task(id: "\(model.activeDay?.id.uuidString ?? "")\(model.changeGeneration)") { await model.loadMorningRecap(); await model.loadPipNotice() }
         .onChange(of: model.readModel, initial: true) { _, readModel in publishWidgetSnapshot(readModel); syncDayProgressActivity(readModel) }
         .onChange(of: quickLog.pending, initial: true) { _, _ in openQuickLog() }
         .onChange(of: quickLog.openCoach, initial: true) { _, _ in openCoachRequest() }
