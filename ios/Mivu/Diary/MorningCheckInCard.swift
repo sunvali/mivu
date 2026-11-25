@@ -11,6 +11,10 @@ struct MorningCheckInCard: View {
     /// Coach shows only what is still asked, with the option to answer in a message instead.
     var compact = false
     var onTellCoach: (() -> Void)? = nil
+    /// What Pip noticed in the diary; the full card only, since in Coach his bubble says it.
+    var notice: PipNotice? = nil
+    /// Sends the offer's message to Coach; nil when nothing can answer it, so no button shows.
+    var onOffer: ((String) -> Void)? = nil
     var onDismiss: () -> Void
     @AppStorage("weightUnit") private var unit = "kg"
     @AppStorage("morningWeightSkippedDay") private var skippedDay = ""
@@ -68,6 +72,7 @@ struct MorningCheckInCard: View {
                 dismissButton
             }
             if showsRecap { recap }
+            if let notice { noticeRow(notice) }
             if askingWeight { weightEntry }
             else if let todayWeight { weightResult(todayWeight) }
             if !askingWeight {
@@ -103,6 +108,24 @@ struct MorningCheckInCard: View {
             if let target = previousTarget, target > 0 {
                 ProgressView(value: min(kcal / target, 1)).tint(Color.diaryEnergy)
                     .accessibilityLabel("Intake toward that day's goal")
+            }
+        }
+    }
+
+    /// Pip's one observation for the day, with at most one next step.
+    private func noticeRow(_ notice: PipNotice) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 10) {
+                Image("PipPreview").resizable().scaledToFit().frame(width: 36, height: 36).accessibilityHidden(true)
+                Text(notice.text).font(.subheadline.weight(.medium)).foregroundStyle(Color.diaryText)
+                    .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("morningPipNotice")
+            }
+            if let offer = notice.offer, let onOffer {
+                Button { onOffer(offer.message) } label: {
+                    Text(offer.title).font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.bordered).tint(Color.diaryAccent).buttonBorderShape(.capsule)
+                .accessibilityHint("Sends to Coach").accessibilityIdentifier("morningPipOffer")
             }
         }
     }
