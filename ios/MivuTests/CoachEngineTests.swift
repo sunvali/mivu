@@ -166,6 +166,53 @@ private actor CoachInputFixture {
     private let logArgs = """
     {"target_local_date":"2027-01-15","items":[{"name":"Eggs","quantity":2,"unit":"egg","kcal":140,"carbs":1,"protein":12,"fat":10},{"name":"Bread","quantity":3,"unit":"slice","kcal":240,"carbs":45,"protein":9,"fat":3},{"name":"Salad","quantity":1,"unit":"bowl","kcal":40,"carbs":8,"protein":1,"fat":0}]}
     """
+    // MARK: What Pip noticed today
+
+    /// The per-turn developer message; the person's own message follows it.
+    private func tail(_ input: [CoachInferenceInput]) -> String {
+        for case .message(role: .developer, text: let text, images: _) in input.reversed() { return text }
+        return ""
+    }
+
+    @Test func tailMessageCarriesPipsNotice() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let notice = "Protein came in short on 9 of your last 12 logged days."
+        let model = CoachFixture([result(text: "Got it.")])
+        _ = try await CoachEngine(store: store, infer: { try await model.infer($0, $1) }, pipNotice: { notice })
+            .run(turnID: turn.id, expectedProfileID: profile.id)
+        let input = try #require(await model.inputs.first)
+        #expect(tail(input).contains("Earlier today Pip told the person: \"\(notice)\""))
+        // The leading rules stay a cacheable prefix.
+        if case .message(role: .developer, text: let rules, images: _)? = input.first { #expect(rules == CoachEngine.stableRules) } else { Issue.record("no rules message") }
+    }
+
+    @Test func noNoticeLeavesTheInputUnchanged() async throws {
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let model = CoachFixture([result(text: "Got it.")])
+        _ = try await CoachEngine(store: store, infer: { try await model.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
+        let input = try #require(await model.inputs.first)
+        #expect(!tail(input).contains("Pip told"))
+        #expect(tail(input).contains("Context: "))
+    }
+
+    @Test func replyMayRepeatTheNoticeNumbers() async throws {
+        let reply = "Yes, protein was short on 8317 of your last 9461 logged days."
+        let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let told = CoachFixture([result(text: reply), result(text: "Protein has been short lately.")])
+        let done = try await CoachEngine(store: store, infer: { try await told.infer($0, $1) },
+                                         pipNotice: { "Protein came in short on 8317 of your last 9461 logged days." })
+            .run(turnID: turn.id, expectedProfileID: profile.id)
+        #expect(done.assistantText == reply)
+        #expect(await told.calls == 1)
+        // Without the notice the same numbers are unverified and the reply is asked for again.
+        let (plainStore, plainProfile, plainTurn, plainRoot) = try await fixture(); defer { try? FileManager.default.removeItem(at: plainRoot) }
+        let untold = CoachFixture([result(text: reply), result(text: "Protein has been short lately.")])
+        let again = try await CoachEngine(store: plainStore, infer: { try await untold.infer($0, $1) })
+            .run(turnID: plainTurn.id, expectedProfileID: plainProfile.id)
+        #expect(again.assistantText == "Protein has been short lately.")
+        #expect(await untold.calls == 2)
+    }
+
     @Test func ownerMealIsLoggedWithAppGeneratedSavedFacts() async throws {
         let (store, profile, turn, root) = try await fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let replies = CoachFixture([result([call("log_food", logArgs)]), result(text: "Saved 9999 calories")])
