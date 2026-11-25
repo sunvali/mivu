@@ -38,8 +38,8 @@ Examples (English; final copy is the builder's, inside the tone rules):
 | Win | "6 of 7 days near target. Your best week this month!" | none |
 | Win | "5 days near target this week, up from 3." | none |
 | Welcome back | "Good to see you again. Pick up from today?" | none |
-| Late dinners | "Dinner landed after 9:30 three times this week." | "Earlier dinner ideas" |
-| Late first meal | "Your first meal came after 1 pm most days this week." | "A quick earlier option" |
+| Late dinners | "Your last meal came after 9:30 pm on 3 days this week." | "Earlier dinner ideas" |
+| Late first meal | "Your first meal came after 1 pm on 4 days this week." | "A quick earlier option" |
 | Protein | "Protein came in short on 9 of your last 12 logged days." | "Easy ways to add protein" |
 
 New users see exactly what they see today until there is enough history.
@@ -109,13 +109,13 @@ Rules for the first version:
 
 | Kind | Fires when | Shown on |
 | --- | --- | --- |
-| Welcome back | The last closed day with food is 3 or more days ago | That day |
-| Best week | Near-target days in the last 7 closed days is at least 4 and beats each of the three weeks before | Any day |
-| Better week | At least 4 near-target days in the last 7, and at least 2 more than the 7 before | Any day |
+| Welcome back | Three or more days were missed: the last closed day is at least 4 days before today | That day |
+| Best week | Near-target days in the last 7 days is at least 4 and beats each of the three weeks before, which together hold at least 10 closed days | Any day |
+| Better week | At least 4 near-target days in the last 7, and at least 2 more than the 7 before, which hold at least 4 closed days | Any day |
 | Weekend drift | Weekend days are off in the same direction on at least 3 of the last 4 weekends, and weekdays are mostly near | The day before the weekend, and weekend days |
 | Weekday drift | One weekday is off in the same direction on at least 3 of its last 4 occurrences | That weekday |
-| Late dinners | Last meal at 21:30 or later on at least 3 of the last 7 closed days | Any day |
-| Late first meal | First meal at 13:00 or later on at least 4 of the last 7 closed days | Any day |
+| Late dinners | A meal later than 21:30 on at least 3 of the last 7 closed days | Any day |
+| Late first meal | First meal later than 13:00 on at least 4 of the last 7 closed days, counting only days where every meal has a real time | Any day |
 | Protein short | A protein target is set, and protein was under 80% of it on at least 60% of the closed days with known protein in the last 14, with at least 5 such days | Any day |
 
 Weekends come from `Calendar.current`, so Friday and Saturday in Israel and
@@ -149,6 +149,8 @@ in the diary or the backup.
 - **Offer chip.** The offer is a `.send` prompt with a stable id, placed
   first in the existing quick-prompt row. It counts toward the row's chip
   limit and cannot be hidden by the person; it goes away with the notice.
+  Without a ChatGPT connection nobody could answer it, so the chip and the
+  morning card's button are not shown; the card still shows the sentence.
 - **Morning card.** The full card on Today shows the notice under the
   recap, passed in by `TodayView`, with the offer as a button that opens
   Coach and sends the prompt. The compact card inside Coach does not repeat
@@ -172,7 +174,7 @@ in the diary or the backup.
   then checks the real numbers with `get_progress`, under its existing rule
   that diary numbers must come from context or a tool result.
 - Today's notice is also given to Coach in the developer message built at
-  request time, read from the shown-notice record, so a hand-typed reply
+  request time, as Pip's note that the person may not have seen, so a hand-typed reply
   such as "what do you mean, Thursdays?" makes sense. It is not added to
   the persisted capture context or manifest, which stay immutable. A turn
   retried on a later day simply no longer carries it.

@@ -304,7 +304,7 @@ enum DiaryCaptureResult: Equatable, Sendable {
             #endif
             if candidates == nil { candidates = await scan(store, profile.id, today, profile.timeZoneID) }
             guard let candidates, selection == token, activeDay?.id == day.id, !Task.isCancelled else { return }
-            // Today and Coach both ask; whichever finishes second finds the day already scanned.
+            // A second load may have finished while this one read; it finds the day already scanned.
             var log = notices.log(for: profile.id)
             if log.scanned != today {
                 log.scanned = today

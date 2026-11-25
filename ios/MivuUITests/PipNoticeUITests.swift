@@ -8,10 +8,11 @@ final class PipNoticeUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
     /// Yesterday has a lunch and today is empty, so the morning card shows; the app opens on Coach.
-    private func launch(_ id: String) -> XCUIApplication {
+    private func launch(_ id: String, connected: Bool = true) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["--diary-ui-test", id, "--coach-ui-test", "--coach-inference-fixture", "--quick-prompts-fixture",
+        app.launchArguments = ["--diary-ui-test", id, "--coach-ui-test", "--quick-prompts-fixture",
                                "--quick-prompts-hour", "9", "--pip-notice-fixture", "--proof-english"]
+        if connected { app.launchArguments.append("--coach-inference-fixture") }
         app.launch()
         XCTAssertTrue(app.navigationBars["Coach"].waitForExistence(timeout: 15))
         return app
@@ -69,8 +70,20 @@ final class PipNoticeUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["morningPipNotice"].waitForExistence(timeout: 2), "Used once, the notice leaves Today too")
     }
 
+    /// An offer nobody can answer would be a dead end, so without a connection Pip keeps to the observation on Today.
+    func testNoOfferWhenCoachCannotAnswer() {
+        let app = launch(UUID().uuidString, connected: false)
+        XCTAssertFalse(app.buttons["coachQuickPrompt-pip.notice"].waitForExistence(timeout: 3))
+        app.tabBars.buttons["Today"].tap()
+        let line = app.staticTexts["morningPipNotice"]
+        XCTAssertTrue(line.waitForExistence(timeout: 10))
+        XCTAssertEqual(line.label, sentence)
+        XCTAssertFalse(app.buttons["morningPipOffer"].exists)
+    }
+
     func testSwitchInSettingsTurnsItOff() {
-        let app = launch(UUID().uuidString)
+        let id = UUID().uuidString
+        var app = launch(id)
         let strip = app.descendants(matching: .any)["coachCompanionStrip"].firstMatch
         XCTAssertTrue(strip.staticTexts[sentence].waitForExistence(timeout: 10))
         app.tabBars.buttons["Today"].tap()
@@ -89,5 +102,20 @@ final class PipNoticeUITests: XCTestCase {
         app.tabBars.buttons["Coach"].tap()
         XCTAssertFalse(app.buttons["coachQuickPrompt-pip.notice"].waitForExistence(timeout: 2))
         XCTAssertFalse(strip.staticTexts[sentence].exists, "Coach drops it at once")
+
+        // Off survives a relaunch, and switching it back on brings today's unused notice back without another launch.
+        app.terminate()
+        app = launch(id)
+        XCTAssertFalse(app.buttons["coachQuickPrompt-pip.notice"].waitForExistence(timeout: 3))
+        app.tabBars.buttons["Today"].tap()
+        XCTAssertFalse(app.staticTexts["morningPipNotice"].waitForExistence(timeout: 2))
+        app.buttons["profileSettings"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        let again = app.switches["pipNoticesToggle"]
+        for _ in 0..<8 where !(again.exists && again.isHittable) { app.collectionViews.firstMatch.swipeUp() }
+        XCTAssertEqual(again.value as? String, "0")
+        again.switches.firstMatch.tap()
+        app.navigationBars["Settings"].buttons["Done"].tap()
+        XCTAssertTrue(app.staticTexts["morningPipNotice"].waitForExistence(timeout: 5), "Switched on, Pip's notice shows the same day")
     }
 }

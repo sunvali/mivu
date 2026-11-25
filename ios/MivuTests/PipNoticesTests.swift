@@ -111,17 +111,35 @@ struct PipNoticesTests {
     }
 
     @Test func lateDinnersAtThree() {
-        let late = [meal(1, 21, 30), meal(2, 22, 10), meal(3, 0, 40, nextDate: true), meal(4, 12, 0)]
+        let late = [meal(1, 21, 31), meal(2, 22, 10), meal(3, 0, 40, nextDate: true), meal(4, 12, 0)]
         #expect(found(meals: late) == [.lateDinners(count: 3)])
-        #expect(found(meals: [meal(1, 21, 29), meal(2, 22, 10), meal(3, 0, 40, nextDate: true)]) == [])
+        // Pip says "after 9:30", so 9:30 itself does not count.
+        #expect(found(meals: [meal(1, 21, 30), meal(2, 22, 10), meal(3, 0, 40, nextDate: true)]) == [])
+        // A meal without a real time the same day cannot make "the last meal was after 9:30" untrue.
+        #expect(found(meals: late + (1...3).map { meal($0, 12, 0, precision: .dateOnly) }) == [.lateDinners(count: 3)])
         // An earlier meal the same evening does not hide the late one.
         #expect(found(meals: late + [meal(1, 12, 0), meal(2, 12, 0), meal(3, 12, 0)]) == [.lateDinners(count: 3)])
     }
 
     @Test func lateFirstMealAtFour() {
-        #expect(found(meals: (1...4).map { meal($0, 13, 0) }) == [.lateFirstMeal(count: 4)])
-        #expect(found(meals: (1...3).map { meal($0, 13, 0) }) == [])
-        #expect(found(meals: (1...4).map { meal($0, 13, 0) } + [meal(4, 8, 0)]) == [])
+        #expect(found(meals: (1...4).map { meal($0, 13, 1) }) == [.lateFirstMeal(count: 4)])
+        #expect(found(meals: (1...3).map { meal($0, 13, 1) }) == [])
+        #expect(found(meals: (1...4).map { meal($0, 13, 1) } + [meal(4, 8, 0)]) == [])
+        // Pip says "after 1 pm", so 1 pm itself does not count.
+        #expect(found(meals: (1...4).map { meal($0, 13, 0) }) == [])
+    }
+
+    @Test func aMealWithoutATimeVoidsTheDayForTheFirstMeal() {
+        // A breakfast logged without a time may have come first, so the day says nothing about the first meal.
+        let lunches = (1...4).map { meal($0, 13, 30) }
+        #expect(found(meals: lunches + (1...4).map { meal($0, 12, 0, precision: .dateOnly) }) == [])
+        #expect(found(meals: lunches + [meal(5, 12, 0, precision: .dateOnly)]) == [.lateFirstMeal(count: 4)])
+    }
+
+    @Test func exactlyTwentyPercentIsNotDrift() {
+        #expect(found(reports { [7, 14, 21].contains($0) ? day($0, kcal: 2400) : nil }) == [])
+        #expect(found(reports { [7, 14, 21].contains($0) ? day($0, kcal: 2401) : nil }) == [.weekdayDrift(weekday: 5, over: true)])
+        #expect(found(reports { [7, 14, 21].contains($0) ? day($0, kcal: 1600) : nil }) == [])
     }
 
     @Test func mealsOnDaysThatAreNotClosedDoNotCount() {
@@ -231,8 +249,8 @@ struct PipNoticesTests {
         #expect(offer(.weekdayDrift(weekday: 5, over: false)) == ["Easy ideas for today", "This day of the week usually comes in well under my calorie target. Give me easy ideas to reach it."])
         #expect(PipNotice.weekdayDrift(weekday: 1, over: true).text == "Sundays usually run over for you.")
         #expect(PipNotice.weekdayDrift(weekday: 7, over: false).text == "Saturdays usually come in well under for you.")
-        #expect(PipNotice.lateDinners(count: 3).text == "Dinner landed after 9:30 pm on 3 days this week.")
-        #expect(offer(.lateDinners(count: 3)) == ["Earlier dinner ideas", "My dinners have been running late this week. Give me an idea for an earlier dinner."])
+        #expect(PipNotice.lateDinners(count: 3).text == "Your last meal came after 9:30 pm on 3 days this week.")
+        #expect(offer(.lateDinners(count: 3)) == ["Earlier dinner ideas", "My last meal has been running late this week. Give me an idea for an earlier dinner."])
         #expect(PipNotice.lateFirstMeal(count: 4).text == "Your first meal came after 1 pm on 4 days this week.")
         #expect(offer(.lateFirstMeal(count: 4)) == ["A quick earlier option", "My first meal has been coming late this week. Suggest a quick earlier option."])
         #expect(protein.text == "Protein came in short on 9 of your last 12 logged days.")

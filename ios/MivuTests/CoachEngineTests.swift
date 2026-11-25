@@ -181,7 +181,9 @@ private actor CoachInputFixture {
         _ = try await CoachEngine(store: store, infer: { try await model.infer($0, $1) }, pipNotice: { notice })
             .run(turnID: turn.id, expectedProfileID: profile.id)
         let input = try #require(await model.inputs.first)
-        #expect(tail(input).contains("Earlier today Pip told the person: \"\(notice)\""))
+        // The person may not have opened the screen that shows it, so it is Pip's note, not something they were told.
+        #expect(tail(input).contains("Pip's note for the person today: \"\(notice)\""))
+        #expect(!tail(input).contains("told the person"))
         // The leading rules stay a cacheable prefix.
         if case .message(role: .developer, text: let rules, images: _)? = input.first { #expect(rules == CoachEngine.stableRules) } else { Issue.record("no rules message") }
     }
@@ -191,7 +193,7 @@ private actor CoachInputFixture {
         let model = CoachFixture([result(text: "Got it.")])
         _ = try await CoachEngine(store: store, infer: { try await model.infer($0, $1) }).run(turnID: turn.id, expectedProfileID: profile.id)
         let input = try #require(await model.inputs.first)
-        #expect(!tail(input).contains("Pip told"))
+        #expect(!tail(input).contains("Pip's note"))
         #expect(tail(input).contains("Context: "))
     }
 

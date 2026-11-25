@@ -46,7 +46,8 @@ struct CoachEngine: Sendable {
             let reply = context.replyTo == nil ? "" : "The user's message replies to replyTo, a quoted message or record: act on its real IDs rather than another record, and ask if it is unavailable. "
             // The app computed Pip's notice from the diary, so its numbers count as verified below.
             let noticed = await pipNotice()
-            let pipSaid = noticed.map { "Earlier today Pip told the person: \"\($0)\" The app computed it from their diary. " } ?? ""
+            // They may not have opened the screen that shows it, so it is a note, never "as I told you".
+            let pipSaid = noticed.map { "Pip's note for the person today: \"\($0)\" The app computed it from their diary; they may not have seen it. " } ?? ""
             var input: [CoachInferenceInput] = [.message(role: .developer, text: Self.stableRules)]
                 + Self.historyMessages(context.recentTurns)
                 + [.message(role: .developer, text: "The app language is \(Self.appLanguage). The captured local clock is \(diaryLocalClock(context.capturedAt, zone: context.captureTimeZoneID)). \(WakingDayInstruction.text(context: context)) \(reply)\(pipSaid)Context: " + (try coachJSON(bare)))]

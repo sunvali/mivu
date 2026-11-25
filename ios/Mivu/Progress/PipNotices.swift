@@ -63,9 +63,8 @@ enum PipNotices {
                 lateDinners(labels, days, input), lateFirstMeal(labels, days, input), proteinShort(days)].compactMap { $0 }
     }
 
-    private static func near(_ week: [DailyProgress?]) -> Int {
-        week.filter { $0.flatMap { ProgressBand.of(kcal: $0.foodTotals?.kcal, target: $0.goal?.targets.kcal) } == .near }.count
-    }
+    /// Progress's own band, so Pip and the Progress screen never disagree about a day.
+    private static func near(_ week: [DailyProgress?]) -> Int { week.filter { $0.flatMap(ProgressInsights.band) == .near }.count }
     private static func closedCount(_ week: [DailyProgress?]) -> Int { week.compactMap { $0 }.count }
 
     /// 1 when more than 20% over the target, -1 when more than 20% under, else 0. Multiplies first so the edge stays exact.
@@ -126,20 +125,22 @@ enum PipNotices {
         let later = ProgressInsights.days(from: recent.localDate, to: ProgressAnalytics.dateLabel(meal.eatenAt, zone: local.timeZone.identifier))
         return later * 1440 + (clock.hour ?? 0) * 60 + (clock.minute ?? 0)
     }
-    /// Timed meals of each closed day in the last seven.
-    private static func mealTimes(_ labels: [String], _ days: [DailyProgress?], _ input: PipNoticeInput) -> [[Int]] {
+    /// Timed meals of each closed day in the last seven, and whether every meal that day had a real time.
+    private static func mealTimes(_ labels: [String], _ days: [DailyProgress?], _ input: PipNoticeInput) -> [(times: [Int], allTimed: Bool)] {
         zip(labels, days).suffix(7).compactMap { label, day in
             guard day != nil else { return nil }
-            let times = input.meals.filter { $0.localDate == label }.compactMap { minutes($0, input.calendar) }
-            return times.isEmpty ? nil : times
+            let meals = input.meals.filter { $0.localDate == label }, times = meals.compactMap { minutes($0, input.calendar) }
+            return times.isEmpty ? nil : (times, times.count == meals.count)
         }
     }
+    /// A meal after 9:30 pm means the last one was, whatever else that day lacks a time.
     private static func lateDinners(_ labels: [String], _ days: [DailyProgress?], _ input: PipNoticeInput) -> PipNotice? {
-        let count = mealTimes(labels, days, input).filter { ($0.max() ?? 0) >= 21 * 60 + 30 }.count
+        let count = mealTimes(labels, days, input).filter { ($0.times.max() ?? 0) > 21 * 60 + 30 }.count
         return count >= 3 ? .lateDinners(count: count) : nil
     }
+    /// A meal without a time may have come first, so only days where every meal is timed can say when eating began.
     private static func lateFirstMeal(_ labels: [String], _ days: [DailyProgress?], _ input: PipNoticeInput) -> PipNotice? {
-        let count = mealTimes(labels, days, input).filter { ($0.min() ?? 0) >= 13 * 60 }.count
+        let count = mealTimes(labels, days, input).filter { $0.allTimed && ($0.times.min() ?? 0) > 13 * 60 }.count
         return count >= 4 ? .lateFirstMeal(count: count) : nil
     }
 
@@ -227,7 +228,7 @@ extension PipNotice {
             case 6: String(localized: "Fridays usually come in well under for you.")
             default: String(localized: "Saturdays usually come in well under for you.")
             }
-        case .lateDinners(let count): String(localized: "Dinner landed after 9:30 pm on \(count) days this week.")
+        case .lateDinners(let count): String(localized: "Your last meal came after 9:30 pm on \(count) days this week.")
         case .lateFirstMeal(let count): String(localized: "Your first meal came after 1 pm on \(count) days this week.")
         case .proteinShort(let short, let days): String(localized: "Protein came in short on \(short) of your last \(days) logged days.")
         }
@@ -246,7 +247,7 @@ extension PipNotice {
         case .weekdayDrift(_, over: false):
             (String(localized: "Easy ideas for today"), String(localized: "This day of the week usually comes in well under my calorie target. Give me easy ideas to reach it."))
         case .lateDinners:
-            (String(localized: "Earlier dinner ideas"), String(localized: "My dinners have been running late this week. Give me an idea for an earlier dinner."))
+            (String(localized: "Earlier dinner ideas"), String(localized: "My last meal has been running late this week. Give me an idea for an earlier dinner."))
         case .lateFirstMeal:
             (String(localized: "A quick earlier option"), String(localized: "My first meal has been coming late this week. Suggest a quick earlier option."))
         case .proteinShort:

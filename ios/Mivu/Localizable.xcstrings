@@ -36022,25 +36022,25 @@
         }
       }
     },
-    "Dinner landed after 9:30 pm on %lld days this week." : {
+    "Your last meal came after 9:30 pm on %lld days this week." : {
       "comment" : "Pip's daily observation about the person's own diary; one short sentence, no blame, no gendered forms; the number is 3 to 7",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Esta semana cenaste después de las 9:30 p. m. en %lld días."
+            "value" : "Esta semana tu última comida fue después de las 9:30 p. m. en %lld días."
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "השבוע ארוחת הערב הייתה אחרי 21:30 ב-%lld ימים."
+            "value" : "השבוע הארוחה האחרונה הייתה אחרי 21:30 ב-%lld ימים."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Дней с ужином после 21:30 на этой неделе: %lld."
+            "value" : "Дней, когда последний приём пищи был после 21:30, на этой неделе: %lld."
           }
         }
       }
@@ -36298,25 +36298,25 @@
         }
       }
     },
-    "My dinners have been running late this week. Give me an idea for an earlier dinner." : {
+    "My last meal has been running late this week. Give me an idea for an earlier dinner." : {
       "comment" : "Message sent to Coach in the person's own voice when they tap Pip's offer; no gendered forms",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Esta semana estoy cenando tarde. Dame una idea para cenar más temprano."
+            "value" : "Esta semana mi última comida está siendo tarde. Dame una idea para cenar más temprano."
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "השבוע ארוחות הערב שלי יוצאות מאוחר. אפשר רעיון לארוחת ערב מוקדמת יותר?"
+            "value" : "השבוע הארוחה האחרונה שלי יוצאת מאוחר. אפשר רעיון לארוחת ערב מוקדמת יותר?"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "На этой неделе ужин у меня получается поздно. Подскажи идею для ужина пораньше."
+            "value" : "На этой неделе последний приём пищи у меня получается поздно. Подскажи идею для ужина пораньше."
           }
         }
       }

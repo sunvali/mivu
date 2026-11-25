@@ -113,6 +113,8 @@ struct DiaryRootView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.requestReview) private var requestReview
     @AppStorage("diarySelectedTab") private var restoredTab = "today"
+    /// Part of the load task's identity, so switching Pip's observations on shows today's notice without a relaunch.
+    @AppStorage(PipNoticeStore.enabledKey, store: DiaryLaunch.defaults) private var pipNoticesOn = true
     private let nutritionKeys: NutritionAPIKeyStore
     private var services: MivuServices
     init() {
@@ -208,7 +210,7 @@ struct DiaryRootView: View {
             // The first Siri use may have been on a locked phone, where no permission prompt can show.
             if hadSiriPrompts { await MealNotification.requestPermissionIfNeeded() }
         }
-        .task(id: "\(model.activeDay?.id.uuidString ?? "")\(model.changeGeneration)") { await model.loadMorningRecap(); await model.loadPipNotice() }
+        .task(id: "\(model.activeDay?.id.uuidString ?? "")\(model.changeGeneration)\(pipNoticesOn)") { await model.loadMorningRecap(); await model.loadPipNotice() }
         .onChange(of: model.readModel, initial: true) { _, readModel in publishWidgetSnapshot(readModel); syncDayProgressActivity(readModel) }
         .onChange(of: quickLog.pending, initial: true) { _, _ in openQuickLog() }
         .onChange(of: quickLog.openCoach, initial: true) { _, _ in openCoachRequest() }

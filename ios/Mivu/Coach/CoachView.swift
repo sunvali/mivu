@@ -446,7 +446,10 @@ struct CoachView: View {
     /// Checked while the tip shows too, so it never outlives a profile switch to an empty chat.
     private var canTeachReply: Bool { (coach.timeline?.exchanges.count ?? 0) >= 3 && !UIAccessibility.isVoiceOverRunning }
     /// At accessibility sizes the bubble hides what Pip says, so his offer chip goes with it; the morning card still shows both.
-    private var pipNotice: PipNotice? { pipNoticesOn && !typeSize.isAccessibilitySize ? coach.diary.visiblePipNotice : nil }
+    /// Not connected, Pip asks to connect instead and nobody could answer the offer, so it waits too.
+    private var pipNotice: PipNotice? {
+        pipNoticesOn && !typeSize.isAccessibilitySize && (coach.connection.canInfer || DiaryLaunch.isCoachInferenceFixture) ? coach.diary.visiblePipNotice : nil
+    }
     private func pipLine(tip: Bool) -> PipLine? {
         let line = PipLine.current(hour: Calendar.current.component(.hour, from: .now), mealsLogged: !coach.diary.todaysMeals.isEmpty,
                                    typing: editing, connected: coach.connection.canInfer || DiaryLaunch.isCoachInferenceFixture,
@@ -822,7 +825,8 @@ struct CoachView: View {
             .frame(minHeight: 34)
             .background {
                 Capsule().fill(Color.diarySurface)
-                    .overlay { if prompt.kcal != nil { Capsule().fill(Color.diaryAccent.opacity(colorScheme == .dark ? 0.22 : 0.09)) } }
+                    // Tinted like a re-log chip, so Pip's offer reads as part of what he just said.
+                    .overlay { if prompt.kcal != nil || prompt.id == QuickPrompts.pipNoticeID { Capsule().fill(Color.diaryAccent.opacity(colorScheme == .dark ? 0.22 : 0.09)) } }
             }
             .overlay {
                 if prompt.kcal == nil {
@@ -864,8 +868,8 @@ struct CoachView: View {
             editing = true; fillTaps += 1
         case .send(let text):
             coach.attachmentDraft.text = text; sendTaps += 1
-            if prompt.id == QuickPrompts.pipNoticeID { coach.diary.markPipOfferTapped() }
-            Task { _ = await coach.send() }
+            // Pip's offer is used up only once its message is really on its way.
+            Task { if await coach.send(), prompt.id == QuickPrompts.pipNoticeID { coach.diary.markPipOfferTapped() } }
         }
     }
     private var placeholder: some View {
