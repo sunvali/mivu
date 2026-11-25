@@ -152,3 +152,105 @@ enum PipNotices {
         return known.count >= 5 && short * 10 >= known.count * 6 ? .proteinShort(short: short, days: known.count) : nil
     }
 }
+
+// MARK: Choosing
+
+/// What Pip has said lately, per profile. Small and disposable, so it lives in UserDefaults and stays out of backups.
+struct PipNoticeLog: Codable, Equatable, Sendable {
+    struct Shown: Codable, Equatable, Sendable {
+        var localDate: String
+        var notice: PipNotice
+        var offerTapped = false
+    }
+    /// The last waking day the detector ran for, so one day is scanned once even when nothing was found.
+    var scanned: String?
+    /// Newest last.
+    var shown: [Shown] = []
+}
+
+struct PipNoticeStore {
+    /// One switch for all profiles, like the morning check-in; absent means on.
+    static let enabledKey = "pipNoticesEnabled"
+    let defaults: UserDefaults
+
+    func log(for profileID: UUID) -> PipNoticeLog {
+        defaults.data(forKey: Self.key(profileID)).flatMap { try? JSONDecoder().decode(PipNoticeLog.self, from: $0) } ?? PipNoticeLog()
+    }
+    /// Keeps the last 30 days, which is more than any rest rule reads.
+    func save(_ log: PipNoticeLog, for profileID: UUID) {
+        var log = log
+        if let latest = log.scanned ?? log.shown.last?.localDate {
+            log.shown.removeAll { ProgressInsights.days(from: $0.localDate, to: latest) > 30 }
+        }
+        defaults.set(try? JSONEncoder().encode(log), forKey: Self.key(profileID))
+    }
+    private static func key(_ profileID: UUID) -> String { "pipNotices." + profileID.uuidString }
+}
+
+extension PipNotices {
+    /// The first candidate allowed today: a kind rests seven days, and at most two notices that are not wins show in any seven.
+    static func choose(_ candidates: [PipNotice], shown: [PipNoticeLog.Shown], today: String) -> PipNotice? {
+        let recent = shown.filter { (0..<7).contains(ProgressInsights.days(from: $0.localDate, to: today)) }.map(\.notice)
+        let nudgesLeft = recent.filter { !$0.isWin }.count < 2
+        return candidates.first { candidate in (candidate.isWin || nudgesLeft) && !recent.contains { $0.kind == candidate.kind } }
+    }
+}
+
+// MARK: Words
+
+extension PipNotice {
+    /// One short sentence for Pip's bubble. Whole sentences per case, so translations keep their grammar.
+    var text: String {
+        switch self {
+        case .welcomeBack: String(localized: "Good to see you again. Pick up from today?")
+        case .bestWeek(let near, let days): String(localized: "\(near) of \(days) days near target. Your best week this month!")
+        case .betterWeek(let near, let before): String(localized: "\(near) days near target this week, up from \(before).")
+        case .weekendDrift(over: true): String(localized: "Weekends tend to run over for you.")
+        case .weekendDrift(over: false): String(localized: "Weekends tend to come in well under for you.")
+        case .weekdayDrift(let weekday, over: true):
+            switch weekday {
+            case 1: String(localized: "Sundays usually run over for you.")
+            case 2: String(localized: "Mondays usually run over for you.")
+            case 3: String(localized: "Tuesdays usually run over for you.")
+            case 4: String(localized: "Wednesdays usually run over for you.")
+            case 5: String(localized: "Thursdays usually run over for you.")
+            case 6: String(localized: "Fridays usually run over for you.")
+            default: String(localized: "Saturdays usually run over for you.")
+            }
+        case .weekdayDrift(let weekday, over: false):
+            switch weekday {
+            case 1: String(localized: "Sundays usually come in well under for you.")
+            case 2: String(localized: "Mondays usually come in well under for you.")
+            case 3: String(localized: "Tuesdays usually come in well under for you.")
+            case 4: String(localized: "Wednesdays usually come in well under for you.")
+            case 5: String(localized: "Thursdays usually come in well under for you.")
+            case 6: String(localized: "Fridays usually come in well under for you.")
+            default: String(localized: "Saturdays usually come in well under for you.")
+            }
+        case .lateDinners(let count): String(localized: "Dinner landed after 9:30 pm on \(count) days this week.")
+        case .lateFirstMeal(let count): String(localized: "Your first meal came after 1 pm on \(count) days this week.")
+        case .proteinShort(let short, let days): String(localized: "Protein came in short on \(short) of your last \(days) logged days.")
+        }
+    }
+
+    /// The one next step Pip offers: a chip title and the message it sends to Coach, in the person's voice. Wins need none.
+    var offer: (title: String, message: String)? {
+        switch self {
+        case .welcomeBack, .bestWeek, .betterWeek: nil
+        case .weekendDrift(over: true):
+            (String(localized: "Plan a lighter weekend"), String(localized: "My weekends usually run over my calorie target. Help me plan a lighter one."))
+        case .weekendDrift(over: false):
+            (String(localized: "Ideas to fill the weekend"), String(localized: "My weekends usually come in well under my calorie target. Give me easy ideas to reach it."))
+        case .weekdayDrift(_, over: true):
+            (String(localized: "Plan today with me"), String(localized: "This day of the week usually runs over my calorie target. Help me plan today."))
+        case .weekdayDrift(_, over: false):
+            (String(localized: "Easy ideas for today"), String(localized: "This day of the week usually comes in well under my calorie target. Give me easy ideas to reach it."))
+        case .lateDinners:
+            (String(localized: "Earlier dinner ideas"), String(localized: "My dinners have been running late this week. Give me an idea for an earlier dinner."))
+        case .lateFirstMeal:
+            (String(localized: "A quick earlier option"), String(localized: "My first meal has been coming late this week. Suggest a quick earlier option."))
+        case .proteinShort:
+            (String(localized: "Easy ways to add protein"), String(localized: "My protein has been short of my target lately. Give me easy ways to add some."))
+        }
+    }
+}

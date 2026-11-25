@@ -169,4 +169,89 @@ struct PipNoticesTests {
         #expect(found(data) == [.bestWeek(near: 6, days: 7), .betterWeek(near: 6, before: 3),
                                 .weekdayDrift(weekday: 5, over: true), .proteinShort(short: 3, days: 5)])
     }
+
+    // MARK: Choosing, the log and the words
+
+    private func shown(_ date: String, _ notice: PipNotice) -> PipNoticeLog.Shown { PipNoticeLog.Shown(localDate: date, notice: notice) }
+    private let protein = PipNotice.proteinShort(short: 9, days: 12)
+    private var everyNotice: [PipNotice] {
+        [.welcomeBack, .bestWeek(near: 6, days: 7), .betterWeek(near: 5, before: 3), .weekendDrift(over: true), .weekendDrift(over: false),
+         .lateDinners(count: 3), .lateFirstMeal(count: 4), protein]
+            + (1...7).flatMap { [.weekdayDrift(weekday: $0, over: true), .weekdayDrift(weekday: $0, over: false)] }
+    }
+
+    @Test func firstCandidateWinsWithNoHistory() {
+        #expect(PipNotices.choose([.lateDinners(count: 3), protein], shown: [], today: today) == .lateDinners(count: 3))
+    }
+
+    @Test func kindRestsSevenDays() {
+        let history = [shown("2026-11-20", .proteinShort(short: 6, days: 10))]
+        #expect(PipNotices.choose([protein], shown: history, today: "2026-11-26") == nil)
+        #expect(PipNotices.choose([protein], shown: history, today: "2026-11-27") == protein)
+    }
+
+    @Test func twoNonWinsPerSevenDays() {
+        let best = PipNotice.bestWeek(near: 6, days: 7), drift = PipNotice.weekdayDrift(weekday: 5, over: true)
+        let full = [shown("2026-11-21", .lateDinners(count: 3)), shown("2026-11-23", protein)]
+        #expect(PipNotices.choose([drift, best], shown: full, today: today) == best)
+        #expect(PipNotices.choose([drift], shown: full, today: today) == nil)
+        // A week on, the older one no longer counts.
+        #expect(PipNotices.choose([drift, best], shown: [shown("2026-11-19", .lateDinners(count: 3)), shown("2026-11-23", protein)], today: today) == drift)
+        // Wins never use up the allowance.
+        #expect(PipNotices.choose([drift], shown: [shown("2026-11-21", best), shown("2026-11-23", .welcomeBack)], today: today) == drift)
+    }
+
+    @Test func logRoundTripsAndDropsOldEntries() {
+        let store = PipNoticeStore(defaults: UserDefaults(suiteName: UUID().uuidString)!), profile = UUID()
+        #expect(store.log(for: profile) == PipNoticeLog())
+        var entry = shown("2026-11-26", protein); entry.offerTapped = true
+        store.save(PipNoticeLog(scanned: "2026-11-26", shown: [shown("2026-10-26", .welcomeBack), shown("2026-10-27", .lateDinners(count: 3)), entry]), for: profile)
+        #expect(store.log(for: profile) == PipNoticeLog(scanned: "2026-11-26", shown: [shown("2026-10-27", .lateDinners(count: 3)), entry]))
+        #expect(store.log(for: UUID()) == PipNoticeLog())
+    }
+
+    @Test func unreadableLogReadsAsEmpty() {
+        let defaults = UserDefaults(suiteName: UUID().uuidString)!, profile = UUID()
+        defaults.set(Data("not json".utf8), forKey: "pipNotices." + profile.uuidString)
+        #expect(PipNoticeStore(defaults: defaults).log(for: profile) == PipNoticeLog())
+    }
+
+    @Test func englishCopy() {
+        func offer(_ notice: PipNotice) -> [String] { notice.offer.map { [$0.title, $0.message] } ?? [] }
+        #expect(PipNotice.welcomeBack.text == "Good to see you again. Pick up from today?")
+        #expect(PipNotice.bestWeek(near: 6, days: 7).text == "6 of 7 days near target. Your best week this month!")
+        #expect(PipNotice.betterWeek(near: 5, before: 3).text == "5 days near target this week, up from 3.")
+        #expect(PipNotice.weekendDrift(over: true).text == "Weekends tend to run over for you.")
+        #expect(offer(.weekendDrift(over: true)) == ["Plan a lighter weekend", "My weekends usually run over my calorie target. Help me plan a lighter one."])
+        #expect(PipNotice.weekendDrift(over: false).text == "Weekends tend to come in well under for you.")
+        #expect(offer(.weekendDrift(over: false)) == ["Ideas to fill the weekend", "My weekends usually come in well under my calorie target. Give me easy ideas to reach it."])
+        #expect(PipNotice.weekdayDrift(weekday: 5, over: true).text == "Thursdays usually run over for you.")
+        #expect(offer(.weekdayDrift(weekday: 5, over: true)) == ["Plan today with me", "This day of the week usually runs over my calorie target. Help me plan today."])
+        #expect(PipNotice.weekdayDrift(weekday: 5, over: false).text == "Thursdays usually come in well under for you.")
+        #expect(offer(.weekdayDrift(weekday: 5, over: false)) == ["Easy ideas for today", "This day of the week usually comes in well under my calorie target. Give me easy ideas to reach it."])
+        #expect(PipNotice.weekdayDrift(weekday: 1, over: true).text == "Sundays usually run over for you.")
+        #expect(PipNotice.weekdayDrift(weekday: 7, over: false).text == "Saturdays usually come in well under for you.")
+        #expect(PipNotice.lateDinners(count: 3).text == "Dinner landed after 9:30 pm on 3 days this week.")
+        #expect(offer(.lateDinners(count: 3)) == ["Earlier dinner ideas", "My dinners have been running late this week. Give me an idea for an earlier dinner."])
+        #expect(PipNotice.lateFirstMeal(count: 4).text == "Your first meal came after 1 pm on 4 days this week.")
+        #expect(offer(.lateFirstMeal(count: 4)) == ["A quick earlier option", "My first meal has been coming late this week. Suggest a quick earlier option."])
+        #expect(protein.text == "Protein came in short on 9 of your last 12 logged days.")
+        #expect(offer(protein) == ["Easy ways to add protein", "My protein has been short of my target lately. Give me easy ways to add some."])
+    }
+
+    @Test func everyNoticeHasItsOwnSentence() {
+        #expect(Set(everyNotice.map(\.text)).count == everyNotice.count)
+        #expect(everyNotice.allSatisfy { !$0.text.isEmpty })
+    }
+
+    @Test func winsCarryNoOffer() {
+        for notice in everyNotice { #expect((notice.offer == nil) == notice.isWin) }
+    }
+
+    @Test func copyAvoidsBlame() {
+        for notice in everyNotice {
+            let words = ([notice.text] + (notice.offer.map { [$0.title, $0.message] } ?? [])).joined(separator: " ").lowercased()
+            for banned in ["bad", "cheat", "fail", "streak", "skip"] { #expect(!words.contains(banned), "\(notice.kind) says \(banned)") }
+        }
+    }
 }
