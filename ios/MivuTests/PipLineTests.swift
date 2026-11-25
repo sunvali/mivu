@@ -4,9 +4,28 @@ import Testing
 struct PipLineTests {
     private func line(hour: Int = 12, mealsLogged: Bool = false, typing: Bool = false, connected: Bool = true,
                       processing: Bool = false, withPhotos: Bool = false, recovery: Bool = false,
-                      error: String? = nil, turnState: CoachTurnState? = nil, chips: Bool = false, tip: Bool = false) -> PipLine? {
+                      error: String? = nil, turnState: CoachTurnState? = nil, chips: Bool = false, tip: Bool = false,
+                      notice: String? = nil) -> PipLine? {
         PipLine.current(hour: hour, mealsLogged: mealsLogged, typing: typing, connected: connected, processing: processing,
-                        withPhotos: withPhotos, recovery: recovery, error: error, turnState: turnState, chips: chips, tip: tip)
+                        withPhotos: withPhotos, recovery: recovery, error: error, turnState: turnState, chips: chips, tip: tip, notice: notice)
+    }
+
+    @Test func noticeReplacesThePreMealGreeting() {
+        let notice = "Thursdays usually run over for you."
+        #expect(line(hour: 8, notice: notice) == .say(notice))
+        #expect(line(hour: 19, chips: true, notice: notice) == .say(notice))
+        #expect(line(hour: 2, notice: notice) == .say(notice))
+    }
+
+    @Test func noticeYieldsToEverythingElse() {
+        let notice = "Thursdays usually run over for you."
+        #expect(line(processing: true, notice: notice) == .working("Counting that up…"))
+        #expect(line(connected: false, notice: notice) == .connect)
+        #expect(line(recovery: true, turnState: .needsRetry, notice: notice) == .problem("That one didn’t go through.", detail: nil, canRetry: true))
+        #expect(line(typing: true, notice: notice) == nil)
+        #expect(line(tip: true, notice: notice) == PipLine.replyTip)
+        #expect(line(hour: 8, mealsLogged: true, notice: notice) == .say("Anything else to log?"))
+        #expect(line(hour: 8, mealsLogged: true, chips: true, notice: notice) == .say("Anything else?"))
     }
 
     @Test func chipsShortenOnlyTheIdleLine() {

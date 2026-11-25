@@ -92,10 +92,13 @@ struct QuickPromptInput: Sendable {
     var limit: Int
     var wide: Bool
     var hidden: Set<String>
+    /// What Pip noticed today, while it is still on screen; its offer leads the row.
+    var notice: PipNotice? = nil
 }
 
 /// Rule-based chips for the moment. Pure, so every rule is pinned by tests rather than by the view.
 enum QuickPrompts {
+    static let pipNoticeID = "pip.notice"
     static func choose(_ input: QuickPromptInput) -> [QuickPrompt] {
         var chips: [QuickPrompt] = []
         switch input.latest {
@@ -121,6 +124,10 @@ enum QuickPrompts {
         chips = chips.filter { !input.hidden.contains($0.id) && seen.insert($0.id).inserted }
         if !chips.prefix(2).contains(where: \.sends), let index = chips.firstIndex(where: \.sends) {
             chips.insert(chips.remove(at: index), at: 1)
+        }
+        // Pip's offer goes with his sentence, so it cannot be hidden on its own; it leaves when the notice does.
+        if let offer = input.notice?.offer, input.todaysMeals.isEmpty {
+            chips.insert(QuickPrompt(id: pipNoticeID, title: offer.title, symbol: nil, action: .send(offer.message)), at: 0)
         }
         return Array(chips.prefix(input.limit))
     }
