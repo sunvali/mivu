@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.0](https://github.com/sunvali/mivu/compare/android-v0.3.1...android-v0.4.0) (2026-11-26)
+
+
+### Features
+
+* **stickers:** Pip sticker pack for WhatsApp and iMessage ([#138](https://github.com/sunvali/mivu/issues/138)) ([5b8c644](https://github.com/sunvali/mivu/commit/5b8c644c9e117089503b3f57532bebb7673a4af5))
+* **stickers:** Pip stickers in the iOS and Android apps ([#141](https://github.com/sunvali/mivu/issues/141)) ([9b24b3f](https://github.com/sunvali/mivu/commit/9b24b3fca17c4b4a4626b1c0a5f2dd51f5cb5c54))
+
+
+### Bug Fixes
+
+* **coach:** give chat-logged meals a time ([#122](https://github.com/sunvali/mivu/issues/122)) ([90664b9](https://github.com/sunvali/mivu/commit/90664b9aa450a0bd1cac68350487ede856850330))
+* **copy:** include ChatGPT Go among eligible plans ([#125](https://github.com/sunvali/mivu/issues/125)) ([9773161](https://github.com/sunvali/mivu/commit/97731611d637b4c45bd5bd0e81423527803917af))
+
 ## [0.3.1](https://github.com/sunvali/mivu/compare/android-v0.3.0...android-v0.3.1) (2026-11-11)
 
 
