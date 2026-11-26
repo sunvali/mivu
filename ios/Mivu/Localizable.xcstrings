@@ -35906,6 +35906,857 @@
           }
         }
       }
+    },
+    "Good to see you again. Pick up from today?" : {
+      "comment" : "Pip's daily observation about the person's own diary; one short sentence, no blame, no gendered forms; said after three or more days away",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qué bueno verte de nuevo. ¿Seguimos desde hoy?"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "טוב לראות אותך שוב. ממשיכים מהיום?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Здорово, что ты снова здесь. Продолжим с сегодняшнего дня?"
+          }
+        }
+      }
+    },
+    "%lld of %lld days near target. Your best week this month!" : {
+      "comment" : "Pip's daily observation about the person's own diary; one short sentence, no blame, no gendered forms; first number is days near the calorie target, second is days logged this week",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld de %2$lld días cerca del objetivo. ¡Tu mejor semana del mes!"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld מתוך %2$lld ימים קרוב ליעד. השבוע הכי טוב החודש!"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Дней рядом с целью: %1$lld из %2$lld. Лучшая неделя за месяц!"
+          }
+        }
+      }
+    },
+    "%lld days near target this week, up from %lld." : {
+      "comment" : "Pip's daily observation about the person's own diary; one short sentence, no blame, no gendered forms; first number is this week (4 to 7), second is the week before",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld días cerca del objetivo esta semana; la anterior fueron %2$lld."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld ימים קרוב ליעד השבוע, לעומת %2$lld בשבוע הקודם."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Дней рядом с целью на этой неделе: %1$lld. На прошлой было %2$lld."
+          }
+        }
+      }
+    },
+    "Weekends tend to run over for you." : {
+      "comment" : "Pip's daily observation about the person's own diary; one short sentence, no blame, no gendered forms; calories usually land over the target at weekends",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los fines de semana sueles pasarte del objetivo."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בסופי שבוע יש נטייה לעבור את היעד."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "По выходным обычно выходит больше цели."
+          }
+        }
+      }
+    },
+    "Weekends tend to come in well under for you." : {
+      "comment" : "Pip's daily observation about the person's own diary; one short sentence, no blame, no gendered forms; calories usually land far under the target at weekends",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los fines de semana sueles quedarte muy por debajo del objetivo."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בסופי שבוע יש נטייה להישאר הרבה מתחת ליעד."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "По выходным обычно выходит заметно меньше цели."
+          }
+        }
+      }
+    },
+    "Your last meal came after 9:30 pm on %lld days this week." : {
+      "comment" : "Pip's daily observation about the person's own diary; one short sentence, no blame, no gendered forms; the number is 3 to 7",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta semana tu última comida fue después de las 9:30 p. m. en %lld días."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "השבוע הארוחה האחרונה הייתה אחרי 21:30 ב-%lld ימים."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Дней, когда последний приём пищи был после 21:30, на этой неделе: %lld."
+          }
+        }
+      }
+    },
+    "Your first meal came after 1 pm on %lld days this week." : {
+      "comment" : "Pip's daily observation about the person's own diary; one short sentence, no blame, no gendered forms; the number is 4 to 7",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta semana tu primera comida fue después de la 1 p. m. en %lld días."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "השבוע הארוחה הראשונה הייתה אחרי 13:00 ב-%lld ימים."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Дней, когда первый приём пищи был после 13:00, на этой неделе: %lld."
+          }
+        }
+      }
+    },
+    "Protein came in short on %lld of your last %lld logged days." : {
+      "comment" : "Pip's daily observation about the person's own diary; one short sentence, no blame, no gendered forms; first number is days under the protein target, second is days counted (5 to 14)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Te faltó proteína en %1$lld de tus últimos %2$lld días registrados."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "החלבון היה נמוך מהיעד ב-%1$lld מתוך %2$lld הימים האחרונים שנרשמו."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Белка не хватило в %1$lld из последних %2$lld записанных дней."
+          }
+        }
+      }
+    },
+    "Plan a lighter weekend" : {
+      "comment" : "Chip beside Pip's observation; about four words. Tapping it sends a request to Coach",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Planear un finde más ligero"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לתכנן סוף שבוע קליל יותר"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Спланировать лёгкие выходные"
+          }
+        }
+      }
+    },
+    "My weekends usually run over my calorie target. Help me plan a lighter one." : {
+      "comment" : "Message sent to Coach in the person's own voice when they tap Pip's offer; no gendered forms",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los fines de semana suelo pasarme de mi objetivo de calorías. Ayúdame a planear uno más ligero."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בסופי שבוע יוצא לי בדרך כלל מעל יעד הקלוריות. אפשר לעזור לי לתכנן סוף שבוע קליל יותר?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "По выходным у меня обычно выходит больше цели по калориям. Помоги спланировать выходные полегче."
+          }
+        }
+      }
+    },
+    "Ideas to fill the weekend" : {
+      "comment" : "Chip beside Pip's observation; about four words. Tapping it sends a request to Coach; ideas for eating enough at the weekend",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ideas para el fin de semana"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רעיונות לסוף השבוע"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Идеи на выходные"
+          }
+        }
+      }
+    },
+    "My weekends usually come in well under my calorie target. Give me easy ideas to reach it." : {
+      "comment" : "Message sent to Coach in the person's own voice when they tap Pip's offer; no gendered forms",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los fines de semana suelo quedarme muy por debajo de mi objetivo de calorías. Dame ideas fáciles para alcanzarlo."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בסופי שבוע יוצא לי בדרך כלל הרבה מתחת ליעד הקלוריות. אפשר רעיונות קלים כדי להגיע אליו?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "По выходным у меня обычно выходит заметно меньше цели по калориям. Подскажи простые идеи, как до неё дойти."
+          }
+        }
+      }
+    },
+    "Plan today with me" : {
+      "comment" : "Chip beside Pip's observation; about four words. Tapping it sends a request to Coach",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Planeemos el día de hoy"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לתכנן יחד את היום"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Спланируем сегодняшний день"
+          }
+        }
+      }
+    },
+    "This day of the week usually runs over my calorie target. Help me plan today." : {
+      "comment" : "Message sent to Coach in the person's own voice when they tap Pip's offer; no gendered forms",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este día de la semana suelo pasarme de mi objetivo de calorías. Ayúdame a planear el día de hoy."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ביום הזה בשבוע יוצא לי בדרך כלל מעל יעד הקלוריות. אפשר לעזור לי לתכנן את היום?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В этот день недели у меня обычно выходит больше цели по калориям. Помоги спланировать сегодняшний день."
+          }
+        }
+      }
+    },
+    "Easy ideas for today" : {
+      "comment" : "Chip beside Pip's observation; about four words. Tapping it sends a request to Coach; ideas for eating enough today",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ideas fáciles para hoy"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רעיונות קלים להיום"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Простые идеи на сегодня"
+          }
+        }
+      }
+    },
+    "This day of the week usually comes in well under my calorie target. Give me easy ideas to reach it." : {
+      "comment" : "Message sent to Coach in the person's own voice when they tap Pip's offer; no gendered forms",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este día de la semana suelo quedarme muy por debajo de mi objetivo de calorías. Dame ideas fáciles para alcanzarlo."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ביום הזה בשבוע יוצא לי בדרך כלל הרבה מתחת ליעד הקלוריות. אפשר רעיונות קלים כדי להגיע אליו?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В этот день недели у меня обычно выходит заметно меньше цели по калориям. Подскажи простые идеи, как до неё дойти."
+          }
+        }
+      }
+    },
+    "Earlier dinner ideas" : {
+      "comment" : "Chip beside Pip's observation; about four words. Tapping it sends a request to Coach",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ideas para cenar antes"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רעיונות לארוחת ערב מוקדמת"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Идеи для ужина пораньше"
+          }
+        }
+      }
+    },
+    "My last meal has been running late this week. Give me an idea for an earlier dinner." : {
+      "comment" : "Message sent to Coach in the person's own voice when they tap Pip's offer; no gendered forms",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta semana mi última comida está siendo tarde. Dame una idea para cenar más temprano."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "השבוע הארוחה האחרונה שלי יוצאת מאוחר. אפשר רעיון לארוחת ערב מוקדמת יותר?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На этой неделе последний приём пищи у меня получается поздно. Подскажи идею для ужина пораньше."
+          }
+        }
+      }
+    },
+    "A quick earlier option" : {
+      "comment" : "Chip beside Pip's observation; about four words. Tapping it sends a request to Coach; a quick thing to eat earlier in the day",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Algo rápido más temprano"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "משהו מהיר מוקדם יותר"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Быстрый вариант пораньше"
+          }
+        }
+      }
+    },
+    "My first meal has been coming late this week. Suggest a quick earlier option." : {
+      "comment" : "Message sent to Coach in the person's own voice when they tap Pip's offer; no gendered forms",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta semana mi primera comida está llegando tarde. Sugiéreme una opción rápida para comer antes."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "השבוע הארוחה הראשונה שלי יוצאת מאוחר. אפשר הצעה למשהו מהיר מוקדם יותר?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На этой неделе первый приём пищи у меня получается поздно. Предложи быстрый вариант пораньше."
+          }
+        }
+      }
+    },
+    "Easy ways to add protein" : {
+      "comment" : "Chip beside Pip's observation; about four words. Tapping it sends a request to Coach",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Formas fáciles de sumar proteína"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "דרכים קלות להוסיף חלבון"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Как легко добавить белка"
+          }
+        }
+      }
+    },
+    "My protein has been short of my target lately. Give me easy ways to add some." : {
+      "comment" : "Message sent to Coach in the person's own voice when they tap Pip's offer; no gendered forms",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Últimamente me falta proteína para llegar a mi objetivo. Dame formas fáciles de sumar un poco."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בזמן האחרון חסר לי חלבון כדי להגיע ליעד. אפשר דרכים קלות להוסיף קצת?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В последнее время мне не хватает белка до цели. Подскажи простые способы добавить немного."
+          }
+        }
+      }
+    },
+    "Pip’s observations" : {
+      "comment" : "Settings switch: whether Pip points out patterns in the person's diary once a day",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Observaciones de Pip"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "התובנות של פיפ"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Наблюдения Пипа"
+          }
+        }
+      }
+    },
+    "Sundays usually run over for you." : {
+      "comment" : "Pip's daily observation about the person's own diary; one short sentence, no blame, no gendered forms; calories usually land over the target on this weekday",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los domingos sueles pasarte del objetivo."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בימי ראשון יש נטייה לעבור את היעד."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "По воскресеньям обычно выходит больше цели."
+          }
+        }
+      }
+    },
+    "Sundays usually come in well under for you." : {
+      "comment" : "Pip's daily observation about the person's own diary; one short sentence, no blame, no gendered forms; calories usually land far under the target on this weekday",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los domingos sueles quedarte muy por debajo del objetivo."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בימי ראשון יש נטייה להישאר הרבה מתחת ליעד."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "По воскресеньям обычно выходит заметно меньше цели."
+          }
+        }
+      }
+    },
+    "Mondays usually run over for you." : {
+      "comment" : "Pip's daily observation about the person's own diary; one short sentence, no blame, no gendered forms; calories usually land over the target on this weekday",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los lunes sueles pasarte del objetivo."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בימי שני יש נטייה לעבור את היעד."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "По понедельникам обычно выходит больше цели."
+          }
+        }
+      }
+    },
+    "Mondays usually come in well under for you." : {
+      "comment" : "Pip's daily observation about the person's own diary; one short sentence, no blame, no gendered forms; calories usually land far under the target on this weekday",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los lunes sueles quedarte muy por debajo del objetivo."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בימי שני יש נטייה להישאר הרבה מתחת ליעד."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "По понедельникам обычно выходит заметно меньше цели."
+          }
+        }
+      }
+    },
+    "Tuesdays usually run over for you." : {
+      "comment" : "Pip's daily observation about the person's own diary; one short sentence, no blame, no gendered forms; calories usually land over the target on this weekday",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los martes sueles pasarte del objetivo."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בימי שלישי יש נטייה לעבור את היעד."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "По вторникам обычно выходит больше цели."
+          }
+        }
+      }
+    },
+    "Tuesdays usually come in well under for you." : {
+      "comment" : "Pip's daily observation about the person's own diary; one short sentence, no blame, no gendered forms; calories usually land far under the target on this weekday",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los martes sueles quedarte muy por debajo del objetivo."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בימי שלישי יש נטייה להישאר הרבה מתחת ליעד."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "По вторникам обычно выходит заметно меньше цели."
+          }
+        }
+      }
+    },
+    "Wednesdays usually run over for you." : {
+      "comment" : "Pip's daily observation about the person's own diary; one short sentence, no blame, no gendered forms; calories usually land over the target on this weekday",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los miércoles sueles pasarte del objetivo."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בימי רביעי יש נטייה לעבור את היעד."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "По средам обычно выходит больше цели."
+          }
+        }
+      }
+    },
+    "Wednesdays usually come in well under for you." : {
+      "comment" : "Pip's daily observation about the person's own diary; one short sentence, no blame, no gendered forms; calories usually land far under the target on this weekday",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los miércoles sueles quedarte muy por debajo del objetivo."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בימי רביעי יש נטייה להישאר הרבה מתחת ליעד."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "По средам обычно выходит заметно меньше цели."
+          }
+        }
+      }
+    },
+    "Thursdays usually run over for you." : {
+      "comment" : "Pip's daily observation about the person's own diary; one short sentence, no blame, no gendered forms; calories usually land over the target on this weekday",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los jueves sueles pasarte del objetivo."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בימי חמישי יש נטייה לעבור את היעד."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "По четвергам обычно выходит больше цели."
+          }
+        }
+      }
+    },
+    "Thursdays usually come in well under for you." : {
+      "comment" : "Pip's daily observation about the person's own diary; one short sentence, no blame, no gendered forms; calories usually land far under the target on this weekday",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los jueves sueles quedarte muy por debajo del objetivo."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בימי חמישי יש נטייה להישאר הרבה מתחת ליעד."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "По четвергам обычно выходит заметно меньше цели."
+          }
+        }
+      }
+    },
+    "Fridays usually run over for you." : {
+      "comment" : "Pip's daily observation about the person's own diary; one short sentence, no blame, no gendered forms; calories usually land over the target on this weekday",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los viernes sueles pasarte del objetivo."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בימי שישי יש נטייה לעבור את היעד."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "По пятницам обычно выходит больше цели."
+          }
+        }
+      }
+    },
+    "Fridays usually come in well under for you." : {
+      "comment" : "Pip's daily observation about the person's own diary; one short sentence, no blame, no gendered forms; calories usually land far under the target on this weekday",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los viernes sueles quedarte muy por debajo del objetivo."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בימי שישי יש נטייה להישאר הרבה מתחת ליעד."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "По пятницам обычно выходит заметно меньше цели."
+          }
+        }
+      }
+    },
+    "Saturdays usually run over for you." : {
+      "comment" : "Pip's daily observation about the person's own diary; one short sentence, no blame, no gendered forms; calories usually land over the target on this weekday",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los sábados sueles pasarte del objetivo."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בשבתות יש נטייה לעבור את היעד."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "По субботам обычно выходит больше цели."
+          }
+        }
+      }
+    },
+    "Saturdays usually come in well under for you." : {
+      "comment" : "Pip's daily observation about the person's own diary; one short sentence, no blame, no gendered forms; calories usually land far under the target on this weekday",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los sábados sueles quedarte muy por debajo del objetivo."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בשבתות יש נטייה להישאר הרבה מתחת ליעד."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "По субботам обычно выходит заметно меньше цели."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

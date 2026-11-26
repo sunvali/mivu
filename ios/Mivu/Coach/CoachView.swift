@@ -46,6 +46,8 @@ struct CoachView: View {
     @AppStorage("coachSuggestionsCollapsed", store: DiaryLaunch.defaults) private var suggestionsCollapsed = false
     /// Comma-joined chip IDs the person chose to hide.
     @AppStorage("coachHiddenSuggestions", store: DiaryLaunch.defaults) private var hiddenSuggestions = ""
+    /// Read here so turning Pip's observations off in Settings redraws Coach at once.
+    @AppStorage(PipNoticeStore.enabledKey, store: DiaryLaunch.defaults) private var pipNoticesOn = true
     /// Coach visits left on which Pip still mentions swipe-to-reply; zero once the user has replied.
     @AppStorage("coachReplyTipLeft", store: DiaryLaunch.defaults) private var replyTipLeft = 3
     @State private var replyTip: Bool?
@@ -443,11 +445,16 @@ struct CoachView: View {
     private var pipLine: PipLine? { pipLine(tip: replyTip == true && canTeachReply) }
     /// Checked while the tip shows too, so it never outlives a profile switch to an empty chat.
     private var canTeachReply: Bool { (coach.timeline?.exchanges.count ?? 0) >= 3 && !UIAccessibility.isVoiceOverRunning }
+    /// At accessibility sizes the bubble hides what Pip says, so his offer chip goes with it; the morning card still shows both.
+    /// Not connected, Pip asks to connect instead and nobody could answer the offer, so it waits too.
+    private var pipNotice: PipNotice? {
+        pipNoticesOn && !typeSize.isAccessibilitySize && (coach.connection.canInfer || DiaryLaunch.isCoachInferenceFixture) ? coach.diary.visiblePipNotice : nil
+    }
     private func pipLine(tip: Bool) -> PipLine? {
         let line = PipLine.current(hour: Calendar.current.component(.hour, from: .now), mealsLogged: !coach.diary.todaysMeals.isEmpty,
                                    typing: editing, connected: coach.connection.canInfer || DiaryLaunch.isCoachInferenceFixture,
                                    processing: companionProcessing, withPhotos: sentWithPhotos, recovery: companionRecovery,
-                                   error: coach.errorMessage, turnState: coach.companionTurn?.state, chips: showsQuickPromptRow && !suggestionsCollapsed, tip: tip)
+                                   error: coach.errorMessage, turnState: coach.companionTurn?.state, chips: showsQuickPromptRow && !suggestionsCollapsed, tip: tip, notice: pipNotice?.text)
         // At accessibility sizes the greeting would crowd the conversation; status and errors still show.
         if typeSize.isAccessibilitySize, case .say = line { return nil }
         return line
@@ -744,7 +751,7 @@ struct CoachView: View {
             proteinEaten: totals.protein, proteinTarget: model.activeGoal?.targets.protein,
             weighedToday: model.weight != nil, morningCardShowing: showsMorningCard, latest: latestForQuickPrompts,
             limit: isWide || isShortWindow || typeSize >= .accessibility3 ? 2 : 4, wide: isWide,
-            hidden: Set(hiddenSuggestions.split(separator: ",").map(String.init))))
+            hidden: Set(hiddenSuggestions.split(separator: ",").map(String.init)), notice: pipNotice))
     }
     private var latestForQuickPrompts: QuickPromptLatest? {
         guard let turn = coach.timeline?.exchanges.last, coach.timeline?.window.isLatest(turn.id) == true,
@@ -818,7 +825,8 @@ struct CoachView: View {
             .frame(minHeight: 34)
             .background {
                 Capsule().fill(Color.diarySurface)
-                    .overlay { if prompt.kcal != nil { Capsule().fill(Color.diaryAccent.opacity(colorScheme == .dark ? 0.22 : 0.09)) } }
+                    // Tinted like a re-log chip, so Pip's offer reads as part of what he just said.
+                    .overlay { if prompt.kcal != nil || prompt.id == QuickPrompts.pipNoticeID { Capsule().fill(Color.diaryAccent.opacity(colorScheme == .dark ? 0.22 : 0.09)) } }
             }
             .overlay {
                 if prompt.kcal == nil {
@@ -829,8 +837,10 @@ struct CoachView: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
-            Button(String(localized: "Hide this suggestion"), systemImage: "eye.slash") {
-                hiddenSuggestions = (hiddenSuggestions.split(separator: ",").map(String.init) + [prompt.id]).joined(separator: ",")
+            if prompt.id != QuickPrompts.pipNoticeID {
+                Button(String(localized: "Hide this suggestion"), systemImage: "eye.slash") {
+                    hiddenSuggestions = (hiddenSuggestions.split(separator: ",").map(String.init) + [prompt.id]).joined(separator: ",")
+                }
             }
         }
         .accessibilityLabel(prompt.kcal.map { String(localized: "\(prompt.title), \($0) calories") } ?? prompt.title)
@@ -858,7 +868,8 @@ struct CoachView: View {
             editing = true; fillTaps += 1
         case .send(let text):
             coach.attachmentDraft.text = text; sendTaps += 1
-            Task { _ = await coach.send() }
+            // Pip's offer is used up only once its message is really on its way.
+            Task { if await coach.send(), prompt.id == QuickPrompts.pipNoticeID { coach.diary.markPipOfferTapped() } }
         }
     }
     private var placeholder: some View {

@@ -22,10 +22,34 @@ struct QuickPromptsTests {
     private func input(hour: Int = 12, todaysMeals: [MealReadModel] = [], recent: [RecentMeal] = [], kcalTarget: Double? = 1600,
                        proteinEaten: Double? = nil, proteinTarget: Double? = nil, weighedToday: Bool = false,
                        morningCardShowing: Bool = false, latest: QuickPromptLatest? = nil, limit: Int = 4, wide: Bool = false,
-                       hidden: Set<String> = []) -> QuickPromptInput {
+                       hidden: Set<String> = [], notice: PipNotice? = nil) -> QuickPromptInput {
         QuickPromptInput(hour: hour, today: "2026-11-17", yesterday: "2026-11-16", calendar: calendar, todaysMeals: todaysMeals,
                          recent: recent, kcalEaten: nil, kcalTarget: kcalTarget, proteinEaten: proteinEaten, proteinTarget: proteinTarget,
-                         weighedToday: weighedToday, morningCardShowing: morningCardShowing, latest: latest, limit: limit, wide: wide, hidden: hidden)
+                         weighedToday: weighedToday, morningCardShowing: morningCardShowing, latest: latest, limit: limit, wide: wide, hidden: hidden,
+                         notice: notice)
+    }
+
+    @Test func offerChipLeadsTheRow() throws {
+        let chips = QuickPrompts.choose(input(hour: 9, notice: .proteinShort(short: 9, days: 12)))
+        let first = try #require(chips.first)
+        #expect(first.id == "pip.notice")
+        #expect(first.title == "Easy ways to add protein")
+        #expect(first.action == .send("My protein has been short of my target lately. Give me easy ways to add some."))
+        #expect(chips.count == 4)
+        #expect(chips.filter { $0.id == "pip.notice" }.count == 1)
+    }
+
+    @Test func offerChipIgnoresHiddenAndCountsTowardLimit() {
+        let chips = QuickPrompts.choose(input(hour: 9, limit: 2, hidden: ["pip.notice"], notice: .lateDinners(count: 3)))
+        #expect(chips.map(\.id).first == "pip.notice")
+        #expect(chips.count == 2)
+    }
+
+    @Test func noOfferChipForWinsOrAfterAMeal() {
+        #expect(!QuickPrompts.choose(input(hour: 9, notice: .bestWeek(near: 6, days: 7))).contains { $0.id == "pip.notice" })
+        #expect(!QuickPrompts.choose(input(hour: 9, notice: nil)).contains { $0.id == "pip.notice" })
+        let eaten = QuickPrompts.choose(input(hour: 9, todaysMeals: [meal(hour: 8)], notice: .lateDinners(count: 3)))
+        #expect(!eaten.contains { $0.id == "pip.notice" })
     }
 
     @Test func morningWithYesterdaysBreakfastLeadsWithSameBreakfast() {

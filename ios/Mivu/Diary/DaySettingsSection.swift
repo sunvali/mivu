@@ -12,6 +12,8 @@ struct DaySettingsSection: View {
     @Environment(\.openURL) private var openURL
     @AppStorage(MorningReminder.enabledKey) private var reminder = false
     @AppStorage(MorningReminder.minutesKey) private var minutes = 8 * 60
+    // The diary reads this from the same store, so the switch takes effect at once.
+    @AppStorage(PipNoticeStore.enabledKey, store: DiaryLaunch.defaults) private var pipNotices = true
     @State private var denied = false
 
     var body: some View {
@@ -26,6 +28,8 @@ struct DaySettingsSection: View {
             if reminder {
                 DatePicker("Reminder time", selection: time, displayedComponents: .hourAndMinute).frame(minHeight: 44)
             }
+            Toggle(isOn: $pipNotices) { Label("Pip’s observations", systemImage: "sparkles") }
+                .frame(minHeight: 44).accessibilityIdentifier("pipNoticesToggle")
             Toggle(isOn: $liveActivity) { Label("Show in Dynamic Island", systemImage: "platter.filled.top.iphone") }
                 .frame(minHeight: 44).accessibilityIdentifier("liveActivityToggle").disabled(!activitiesAllowed)
             if liveActivity && activitiesAllowed {

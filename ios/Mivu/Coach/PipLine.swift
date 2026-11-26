@@ -10,7 +10,8 @@ enum PipLine: Equatable {
     static var replyTip: PipLine { .say(String(localized: "Swipe right to reply.")) }
 
     static func current(hour: Int, mealsLogged: Bool, typing: Bool, connected: Bool, processing: Bool,
-                        withPhotos: Bool, recovery: Bool, error: String?, turnState: CoachTurnState?, chips: Bool = false, tip: Bool = false) -> PipLine? {
+                        withPhotos: Bool, recovery: Bool, error: String?, turnState: CoachTurnState?, chips: Bool = false, tip: Bool = false,
+                        notice: String? = nil) -> PipLine? {
         if recovery {
             switch turnState {
             case .waitingForConnection: return .connect
@@ -25,6 +26,8 @@ enum PipLine: Equatable {
         if typing { return nil }
         // The swipe has no visible control, so Pip names it while he has nothing else to say.
         if tip { return replyTip }
+        // What Pip noticed in the diary takes the place of the greeting until the first meal of the day.
+        if !mealsLogged, let notice { return .say(notice) }
         // Beside the quick prompts Pip keeps to a short mood line, so the bubble never repeats the chips.
         if chips {
             if mealsLogged { return .say(String(localized: "Anything else?")) }

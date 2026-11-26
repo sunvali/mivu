@@ -113,6 +113,8 @@ struct DiaryRootView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.requestReview) private var requestReview
     @AppStorage("diarySelectedTab") private var restoredTab = "today"
+    /// Part of the load task's identity, so switching Pip's observations on shows today's notice without a relaunch.
+    @AppStorage(PipNoticeStore.enabledKey, store: DiaryLaunch.defaults) private var pipNoticesOn = true
     private let nutritionKeys: NutritionAPIKeyStore
     private var services: MivuServices
     init() {
@@ -208,7 +210,7 @@ struct DiaryRootView: View {
             // The first Siri use may have been on a locked phone, where no permission prompt can show.
             if hadSiriPrompts { await MealNotification.requestPermissionIfNeeded() }
         }
-        .task(id: "\(model.activeDay?.id.uuidString ?? "")\(model.changeGeneration)") { await model.loadMorningRecap() }
+        .task(id: "\(model.activeDay?.id.uuidString ?? "")\(model.changeGeneration)\(pipNoticesOn)") { await model.loadMorningRecap(); await model.loadPipNotice() }
         .onChange(of: model.readModel, initial: true) { _, readModel in publishWidgetSnapshot(readModel); syncDayProgressActivity(readModel) }
         .onChange(of: quickLog.pending, initial: true) { _, _ in openQuickLog() }
         .onChange(of: quickLog.openCoach, initial: true) { _, _ in openCoachRequest() }
@@ -721,6 +723,9 @@ struct TodayView: View {
     @State private var savedMealID: UUID?
     @State private var choosingZone = false
     @AppStorage("morningCardDismissedDay") private var dismissedMorningDay = ""
+    /// Read here so turning Pip's observations off in Settings redraws Today at once.
+    @AppStorage(PipNoticeStore.enabledKey, store: DiaryLaunch.defaults) private var pipNoticesOn = true
+    @State private var pipOfferID = UUID()
     private let update = AppUpdate.shared
     private let whatsNew = WhatsNew.shared
     @State private var updateCardHidden = false
@@ -751,7 +756,11 @@ struct TodayView: View {
             // One prompt at a time: the morning check-in, then What's New, then the update card.
             if showsMorningCard, let day = model.activeDay, let recap = model.morningRecap {
                 Section {
-                    MorningCheckInCard(model: model, day: day, previous: recap.previous, previousTarget: recap.target, todayWeight: snapshot.weight) {
+                    MorningCheckInCard(model: model, day: day, previous: recap.previous, previousTarget: recap.target, todayWeight: snapshot.weight,
+                                       notice: pipNoticesOn ? model.visiblePipNotice : nil, onOffer: askPip.map { ask in { message in
+                        // One ID per offer, so a retry after an uncertain save reconciles instead of asking twice.
+                        Task { if await ask(message, pipOfferID) { model.markPipOfferTapped(); pipOfferID = UUID() } }
+                    } }) {
                         withAnimation(.snappy) { dismissedMorningDay = day.id.uuidString }
                     }
                 }.transition(.opacity)

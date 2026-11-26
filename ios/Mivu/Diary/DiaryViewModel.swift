@@ -281,6 +281,58 @@ enum DiaryCaptureResult: Equatable, Sendable {
         let target = (try? await store.goal(on: previous.day.localDate, expectedProfileID: owner))??.targets.kcal
         if activeDay?.id == day.id { morningRecap = MorningRecap(previous: previous, target: target) }
     }
+    /// What was loaded, with its owner and day, so a profile switch or a new day never shows a stale notice.
+    private var loadedPipNotice: (profileID: UUID, shown: PipNoticeLog.Shown)?
+    private var currentPipNotice: PipNoticeLog.Shown? {
+        guard preferences?.object(forKey: PipNoticeStore.enabledKey) as? Bool ?? true, let loaded = loadedPipNotice,
+              loaded.profileID == readModel?.head.profile.id, loaded.shown.localDate == activeDay?.localDate else { return nil }
+        return loaded.shown
+    }
+    /// What Pip noticed for the active day, whether or not it is still on screen. Coach is told this one.
+    var todaysPipNotice: PipNotice? { currentPipNotice?.notice }
+    /// The notice while it should show: until the offer is tapped or the first meal of the day is captured, like the morning card.
+    var visiblePipNotice: PipNotice? { currentPipNotice?.offerTapped == false && todaysMeals.isEmpty ? todaysPipNotice : nil }
+    /// One scan per waking day and profile; later calls read the small log. A failed read leaves the day unscanned so it is tried again.
+    func loadPipNotice(scan: @Sendable (DiaryStore, UUID, String, String) async -> [PipNotice]? = DiaryViewModel.pipNoticeCandidates) async {
+        guard let defaults = preferences, defaults.object(forKey: PipNoticeStore.enabledKey) as? Bool ?? true,
+              let token = selection, let day = activeDay, let profile = readModel?.head.profile else { return }
+        let notices = PipNoticeStore(defaults: defaults), today = day.localDate
+        if notices.log(for: profile.id).scanned != today {
+            var candidates: [PipNotice]?
+            #if DEBUG
+            candidates = PipNoticeUITestFixture.notice.map { [$0] }
+            #endif
+            if candidates == nil { candidates = await scan(store, profile.id, today, profile.timeZoneID) }
+            guard let candidates, selection == token, activeDay?.id == day.id, !Task.isCancelled else { return }
+            // A second load may have finished while this one read; it finds the day already scanned.
+            var log = notices.log(for: profile.id)
+            if log.scanned != today {
+                log.scanned = today
+                if let chosen = PipNotices.choose(candidates, shown: log.shown, today: today) { log.shown.append(.init(localDate: today, notice: chosen)) }
+                notices.save(log, for: profile.id)
+            }
+        }
+        loadedPipNotice = notices.log(for: profile.id).shown.last { $0.localDate == today }.map { (profile.id, $0) }
+    }
+    func markPipOfferTapped() {
+        guard var loaded = loadedPipNotice, let defaults = preferences else { return }
+        loaded.shown.offerTapped = true; loadedPipNotice = loaded
+        let notices = PipNoticeStore(defaults: defaults)
+        var log = notices.log(for: loaded.profileID)
+        guard let index = log.shown.lastIndex(where: { $0.localDate == loaded.shown.localDate }) else { return }
+        log.shown[index].offerTapped = true; notices.save(log, for: loaded.profileID)
+    }
+    /// Candidates for `today` from three bounded reads; nil when a read fails.
+    nonisolated static func pipNoticeCandidates(store: DiaryStore, profileID: UUID, today: String, zone: String) async -> [PipNotice]? {
+        let week = ProgressAnalytics.window(endingOn: today, days: 7, offset: 1, zone: zone)
+        guard let from = week.first, let yesterday = week.last, let logged = try? await store.loggedDayCount(expectedProfileID: profileID) else { return nil }
+        guard logged >= 14 else { return [] }
+        guard let progress = try? await store.progressForDisplay(endingOn: yesterday, days: 30, expectedProfileID: profileID),
+              let meals = try? await store.recentMeals(from: from, to: yesterday, expectedProfileID: profileID) else { return nil }
+        // The region of the phone, not the app language, decides which days are the weekend.
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: zone) ?? .current; calendar.locale = .current
+        return PipNotices.candidates(PipNoticeInput(today: today, reports: progress.dailyReports ?? [], meals: meals, loggedDays: logged, calendar: calendar))
+    }
     /// Follows the phone's time zone at an activity point; a failed write leaves the state alone so the next sync retries.
     func syncTimeZone(now: Date = Date()) async {
         guard !isChangingProfile, let defaults = preferences, let profile = readModel?.head.profile else { return }

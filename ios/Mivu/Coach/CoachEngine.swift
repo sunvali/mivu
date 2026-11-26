@@ -11,10 +11,13 @@ struct CoachEngine: Sendable {
     let onConsulted: @Sendable (CoachConsulted) async -> Void
     /// Queues a model switch for after this turn and returns the tool result; the turn keeps its own model.
     let chooseModel: @Sendable (String) async -> String
+    /// What Pip told the person today, if anything, so a reply to it makes sense; read per attempt and never stored.
+    let pipNotice: @Sendable () async -> String?
     init(store: DiaryStore, infer: @escaping @Sendable ([CoachInferenceInput], Data) async throws -> CoachInferenceResult, lookup: @escaping @Sendable (String) async throws -> [FoodEvidenceRecord] = { _ in throw FoodEvidenceClient.Failure.notConfigured }, prepareImages: @escaping @Sendable ([Data]) async throws -> [Data] = { $0 }, onActivity: @escaping @Sendable (CoachActivity) async -> Void = { _ in }, onConsulted: @escaping @Sendable (CoachConsulted) async -> Void = { _ in },
-         chooseModel: @escaping @Sendable (String) async -> String = { _ in #"{"changed":false,"reason":"unavailable"}"# }) {
+         chooseModel: @escaping @Sendable (String) async -> String = { _ in #"{"changed":false,"reason":"unavailable"}"# },
+         pipNotice: @escaping @Sendable () async -> String? = { nil }) {
         self.store = store; self.infer = infer; self.lookup = lookup; self.prepareImages = prepareImages; self.onActivity = onActivity; self.onConsulted = onConsulted
-        self.chooseModel = chooseModel
+        self.chooseModel = chooseModel; self.pipNotice = pipNotice
     }
     func run(turnID: UUID, expectedProfileID: UUID) async throws -> CoachTurnResult {
         do { return try await attempt(turnID: turnID, expectedProfileID: expectedProfileID, isFinal: false) }
@@ -41,9 +44,13 @@ struct CoachEngine: Sendable {
             // Per-turn values live only in the tail message so the leading rules stay a cacheable prefix.
             var bare = context; bare.recentTurns = []
             let reply = context.replyTo == nil ? "" : "The user's message replies to replyTo, a quoted message or record: act on its real IDs rather than another record, and ask if it is unavailable. "
+            // The app computed Pip's notice from the diary, so its numbers count as verified below.
+            let noticed = await pipNotice()
+            // They may not have opened the screen that shows it, so it is a note, never "as I told you".
+            let pipSaid = noticed.map { "Pip's note for the person today: \"\($0)\" The app computed it from their diary; they may not have seen it. " } ?? ""
             var input: [CoachInferenceInput] = [.message(role: .developer, text: Self.stableRules)]
                 + Self.historyMessages(context.recentTurns)
-                + [.message(role: .developer, text: "The app language is \(Self.appLanguage). The captured local clock is \(diaryLocalClock(context.capturedAt, zone: context.captureTimeZoneID)). \(WakingDayInstruction.text(context: context)) \(reply)Context: " + (try coachJSON(bare)))]
+                + [.message(role: .developer, text: "The app language is \(Self.appLanguage). The captured local clock is \(diaryLocalClock(context.capturedAt, zone: context.captureTimeZoneID)). \(WakingDayInstruction.text(context: context)) \(reply)\(pipSaid)Context: " + (try coachJSON(bare)))]
                 + capturedInput(text: turn.text, images: images)
             var knownMeals = context.meals
             var foundMeals: [CoachMealCandidate] = []
@@ -93,7 +100,7 @@ struct CoachEngine: Sendable {
                         if let goal = try JSONDecoder().decode(Goals.self, from: Data(json.utf8)).effective { goals.append(goal) }
                     }
                     let receipts = stored.receipts.map(DiaryDatabase.coachCommittedReceipt)
-                    var sources = [turn.text, try coachJSON(context)] + toolOutputs + (try progress.map(coachJSON)) + (try workouts.map(coachJSON)) + (try goals.map(coachJSON))
+                    var sources = [turn.text, try coachJSON(context)] + [noticed].compactMap { $0 } + toolOutputs + (try progress.map(coachJSON)) + (try workouts.map(coachJSON)) + (try goals.map(coachJSON))
                     // After a save, prose may say how each saved day now stands.
                     for date in Set(receipts.compactMap(\.targetLocalDate)) {
                         sources.append(try coachJSON(await store.coachProgress(endingOn: date, days: 1, finalizingTurnID: turnID, expectedProfileID: expectedProfileID)))

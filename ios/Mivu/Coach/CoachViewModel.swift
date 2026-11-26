@@ -510,6 +510,8 @@ private final class CoachNavigationReadFence: Sendable {
                                 await self.noteConsulted(read, turnID: turn.id)
                             }, chooseModel: { name in
                                 await self.requestModel(name)
+                            }, pipNotice: { [diary] in
+                                await diary.todaysPipNotice?.text
                             }).run(turnID: turn.id, expectedProfileID: owner)
                             // The reply already says it switched, so apply it before anything can stop this pass; it restarts the worker.
                             applyRequestedModel()

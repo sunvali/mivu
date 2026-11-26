@@ -11,6 +11,10 @@ struct MorningCheckInCard: View {
     /// Coach shows only what is still asked, with the option to answer in a message instead.
     var compact = false
     var onTellCoach: (() -> Void)? = nil
+    /// What Pip noticed in the diary; the full card only, since in Coach his bubble says it.
+    var notice: PipNotice? = nil
+    /// Sends the offer's message to Coach; nil when nothing can answer it, so no button shows.
+    var onOffer: ((String) -> Void)? = nil
     var onDismiss: () -> Void
     @AppStorage("weightUnit") private var unit = "kg"
     @AppStorage("morningWeightSkippedDay") private var skippedDay = ""
@@ -19,6 +23,8 @@ struct MorningCheckInCard: View {
     @State private var lastKg: Double?
     @State private var trendKg: Double?
     @State private var saving = false
+    /// Pip grows with the text beside him.
+    @ScaledMetric(relativeTo: .subheadline) private var pipSize: CGFloat = 40
     @FocusState private var weightFocused: Bool
 
     private var showsRecap: Bool { previous.mealCount > 0 }
@@ -68,6 +74,7 @@ struct MorningCheckInCard: View {
                 dismissButton
             }
             if showsRecap { recap }
+            if let notice { noticeRow(notice) }
             if askingWeight { weightEntry }
             else if let todayWeight { weightResult(todayWeight) }
             if !askingWeight {
@@ -103,6 +110,29 @@ struct MorningCheckInCard: View {
             if let target = previousTarget, target > 0 {
                 ProgressView(value: min(kcal / target, 1)).tint(Color.diaryEnergy)
                     .accessibilityLabel("Intake toward that day's goal")
+            }
+        }
+    }
+
+    /// Pip's one observation for the day, with at most one next step.
+    private func noticeRow(_ notice: PipNotice) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image("PipPreview").resizable().scaledToFit().frame(width: pipSize, height: pipSize).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(notice.text).font(.subheadline.weight(.medium)).foregroundStyle(Color.diaryText)
+                    .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("morningPipNotice")
+                // A quiet text link under his sentence, so the weigh-in stays the card's one real job.
+                if let offer = notice.offer, let onOffer {
+                    Button { onOffer(offer.message) } label: {
+                        HStack(spacing: 4) {
+                            Text(offer.title).multilineTextAlignment(.leading)
+                            Image(systemName: "chevron.forward").font(.caption.weight(.semibold)).accessibilityHidden(true)
+                        }
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(Color.diaryAccent)
+                        .frame(minHeight: 44, alignment: .leading).contentShape(.rect)
+                    }
+                    .buttonStyle(.plain).accessibilityHint("Sends to Coach").accessibilityIdentifier("morningPipOffer")
+                }
             }
         }
     }
