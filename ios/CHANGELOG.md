@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.0](https://github.com/sunvali/mivu/compare/ios-v1.9.1...ios-v1.10.0) (2026-11-26)
+
+
+### Features
+
+* **coach:** Pip notices patterns in your diary ([#196](https://github.com/sunvali/mivu/issues/196)) ([e0ff2c8](https://github.com/sunvali/mivu/commit/e0ff2c89722dd1115fd17a639ab48919e08c1d2a))
+
 ## [1.9.1](https://github.com/sunvali/mivu/compare/ios-v1.9.0...ios-v1.9.1) (2026-11-24)
 
 
