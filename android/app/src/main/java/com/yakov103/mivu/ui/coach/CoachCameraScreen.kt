@@ -1,6 +1,7 @@
 package com.yakov103.mivu.ui.coach
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -12,6 +13,22 @@ import androidx.activity.result.contract.ActivityResultContracts.PickMultipleVis
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.activity.result.contract.ActivityResultContracts.RequestPermission
 import androidx.camera.compose.CameraXViewfinder
+import androidx.camera.core.Camera
+import androidx.camera.core.FocusMeteringAction
+import androidx.camera.core.SurfaceOrientedMeteringPointFactory
+import androidx.camera.core.ZoomState
+import androidx.camera.viewfinder.compose.MutableCoordinateTransformer
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
@@ -60,6 +77,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -130,7 +148,22 @@ fun CoachCameraScreen(
     val replacement = rememberLauncherForActivityResult(PickVisualMedia()) { uri ->
         if (uri != null && retaking != null) { model.retakePhoto(retaking, uri); onClose() }
     }
-    val capture = remember { ImageCapture.Builder().build() }
+    var flash by remember { mutableIntStateOf(savedFlash(context)) }
+    val capture = remember { ImageCapture.Builder().setFlashMode(flash).build() }
+    var camera by remember { mutableStateOf<Camera?>(null) }
+    var zoom by remember { mutableStateOf<ZoomState?>(null) }
+    val lenses = remember(camera) {
+        lensZooms(camera?.cameraInfo?.physicalCameraInfos.orEmpty().map { it.intrinsicZoomRatio }.filter { it > 0f })
+    }
+    val setZoom = { ratio: Float ->
+        zoom?.let { camera?.cameraControl?.setZoomRatio(clampedZoom(ratio, lenses, it.minZoomRatio, it.maxZoomRatio)) }
+        Unit
+    }
+    val zoomBy = { scale: Float -> zoom?.let { setZoom(it.zoomRatio * scale) }; Unit }
+    val transformer = remember { MutableCoordinateTransformer() }
+    var focus by remember { mutableStateOf<Offset?>(null) }
+    val focusFade = remember { Animatable(0f) }
+    LaunchedEffect(focus) { if (focus != null) { focusFade.snapTo(1f); focusFade.animateTo(0f, tween(1200)) } }
     var request by remember { mutableStateOf<SurfaceRequest?>(null) }
     var unavailable by remember { mutableStateOf(false) }
     var interrupted by remember { mutableStateOf(false) }
@@ -141,14 +174,16 @@ fun CoachCameraScreen(
         if (permission != CameraPermission.Granted) return@LaunchedEffect
         val preview = Preview.Builder().build().apply { setSurfaceProvider { request = it } }
         val provider = ProcessCameraProvider.awaitInstance(context)
-        val camera = try {
+        val bound = try {
             provider.bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, preview, capture)
         } catch (_: Exception) {
             unavailable = true
             return@LaunchedEffect
         }
+        camera = bound
         // Both end with the destination: CameraX unbinds and LiveData stops observing when [owner] is destroyed.
-        camera.cameraInfo.cameraState.observe(owner) { interrupted = it.error != null }
+        bound.cameraInfo.cameraState.observe(owner) { interrupted = it.error != null }
+        bound.cameraInfo.zoomState.observe(owner) { zoom = it }
     }
 
     val status = when {
@@ -176,7 +211,25 @@ fun CoachCameraScreen(
     }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        request?.takeIf { status == null }?.let { CameraXViewfinder(it, Modifier.fillMaxSize()) }
+        request?.takeIf { status == null }?.let { surface ->
+            CameraXViewfinder(surface, Modifier.fillMaxSize().testTag("cameraViewfinder")
+                .pointerInput(Unit) { detectTransformGestures { _, _, scale, _ -> zoomBy(scale) } }
+                .pointerInput(surface) {
+                    detectTapGestures { tap ->
+                        val at = with(transformer) { tap.transform() }
+                        val point = SurfaceOrientedMeteringPointFactory(surface.resolution.width.toFloat(), surface.resolution.height.toFloat())
+                            .createPoint(at.x, at.y)
+                        // CameraX returns to automatic focus after its default five seconds.
+                        camera?.cameraControl?.startFocusAndMetering(FocusMeteringAction.Builder(point).build())
+                        focus = tap
+                    }
+                }, coordinateTransformer = transformer)
+            focus?.let { at ->
+                val half = with(LocalDensity.current) { 36.dp.toPx() }
+                Box(Modifier.offset { IntOffset((at.x - half).roundToInt(), (at.y - half).roundToInt()) }.size(72.dp)
+                    .alpha(focusFade.value).border(1.5.dp, Color.Yellow).testTag("cameraFocusMark"))
+            }
+        }
         status?.let { text ->
             Column(Modifier.align(Alignment.Center).padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -200,12 +253,20 @@ fun CoachCameraScreen(
                         Text("${draft.photos.size} of $MAX_PHOTOS photos", color = Color.White, style = MaterialTheme.typography.labelLarge)
                     }
                 }
+                if (status == null && camera?.cameraInfo?.hasFlashUnit() == true) {
+                    Box(Modifier.padding(start = 8.dp)) {
+                        CameraFlashButton(flash) { flash = it; capture.flashMode = it; saveFlash(context, it) }
+                    }
+                }
             }
             Box(Modifier.weight(1f))
             val notice = if (failed) PHOTO_NOT_TAKEN else message.takeIf { it != earlier }
             notice?.let {
                 Text(it, Modifier.align(Alignment.CenterHorizontally).background(Scrim, RoundedCornerShape(12.dp)).padding(12.dp)
                     .semantics { liveRegion = LiveRegionMode.Polite }, color = Color.White, textAlign = TextAlign.Center)
+            }
+            if (status == null) zoom?.let {
+                Box(Modifier.align(Alignment.CenterHorizontally).padding(top = 16.dp)) { CameraLensBar(it.zoomRatio, lenses, setZoom, zoomBy) }
             }
             ShutterBar(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp)) {
                 val choose = !importing && !capturing && !full
@@ -252,4 +313,11 @@ private fun ShutterBar(modifier: Modifier, content: @Composable () -> Unit) = La
     }
 }
 
-private val Scrim = Color.Black.copy(alpha = 0.55f)
+internal val Scrim = Color.Black.copy(alpha = 0.55f)
+
+private const val FLASH_KEY = "cameraFlash"
+
+/** The flash choice kept between camera openings, as iOS `quickLogFlash`. */
+internal fun savedFlash(context: Context) = context.getSharedPreferences("mivu", Context.MODE_PRIVATE).getInt(FLASH_KEY, ImageCapture.FLASH_MODE_AUTO)
+
+internal fun saveFlash(context: Context, mode: Int) = context.getSharedPreferences("mivu", Context.MODE_PRIVATE).edit { putInt(FLASH_KEY, mode) }

@@ -1,5 +1,12 @@
 package com.yakov103.mivu.ui.coach
 
+import org.junit.Assume.assumeTrue
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.pinch
+import androidx.compose.ui.geometry.Offset
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.core.CameraSelector
 import android.Manifest
 import android.app.Activity
 import android.app.Instrumentation
@@ -123,6 +130,24 @@ class CoachCameraTest {
         assert(File(coachModel().draft.value.photos.single()).length() > 0)
         openCamera()
         waitForText("1 of 8 photos")
+    }
+
+    @Test fun pinchZoomsTheViewfinder() {
+        launchApp()
+        openCamera()
+        val zoom = ProcessCameraProvider.getInstance(context).get().getCameraInfo(CameraSelector.DEFAULT_BACK_CAMERA).zoomState
+        assumeTrue("the virtual camera cannot zoom", zoom.value!!.maxZoomRatio > 1.05f)
+        compose.onNodeWithTag("cameraViewfinder").performTouchInput {
+            pinch(center - Offset(40f, 0f), center - Offset(300f, 0f), center + Offset(40f, 0f), center + Offset(300f, 0f), durationMillis = 400)
+        }
+        compose.waitUntil(5_000) { zoom.value!!.zoomRatio > 1.05f }
+    }
+
+    @Test fun tapShowsTheFocusMark() {
+        launchApp()
+        openCamera()
+        compose.onNodeWithTag("cameraViewfinder").performTouchInput { click(center) }
+        compose.waitUntil(5_000) { exists(hasTestTag("cameraFocusMark")) }
     }
 
     @Test fun closeReturnsToComposerWithDraft() {
